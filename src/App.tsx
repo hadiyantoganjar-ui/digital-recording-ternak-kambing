@@ -11,6 +11,7 @@ import { HealthRecordModal } from './components/HealthRecordModal';
 import { WeightRecordModal } from './components/WeightRecordModal';
 import { FeedRecordModal } from './components/FeedRecordModal';
 import { AnalyticsView } from './components/AnalyticsView';
+import { GoogleSheetsModal } from './components/GoogleSheetsModal';
 import { Radio, Plus, Layers } from 'lucide-react';
 
 export default function App() {
@@ -37,6 +38,7 @@ export default function App() {
   const [goatForQuickWeight, setGoatForQuickWeight] = useState<GoatRecord | null>(null);
   const [goatForQuickHealth, setGoatForQuickHealth] = useState<GoatRecord | null>(null);
   const [goatForQuickFeed, setGoatForQuickFeed] = useState<GoatRecord | null>(null);
+  const [isGoogleSheetsOpen, setIsGoogleSheetsOpen] = useState(false);
   const [notification, setNotification] = useState<string | null>(null);
 
   const showNotification = (msg: string) => {
@@ -289,6 +291,12 @@ export default function App() {
     showNotification('Data recording kambing berhasil diexport ke CSV.');
   };
 
+  const handleImportGoatsFromSheets = (importedGoats: GoatRecord[]) => {
+    updateGoatsState(() => importedGoats);
+    setSelectedGoatForDetail(null);
+    showNotification(`Berhasil mengimpor ${importedGoats.length} data kambing dari Google Sheets.`);
+  };
+
   const handleQuickFilter = (type: string, value: string) => {
     setActiveTab('data');
     if (type === 'all') {
@@ -333,6 +341,7 @@ export default function App() {
         }}
         onExportCsv={handleExportCsv}
         onResetData={handleResetData}
+        onOpenGoogleSheets={() => setIsGoogleSheetsOpen(true)}
         totalGoats={goats.length}
       />
 
@@ -469,6 +478,14 @@ export default function App() {
         onClose={() => setGoatForQuickFeed(null)}
         onSaveFeedRecord={handleSaveFeedRecord}
         onDeleteFeedRecord={handleDeleteFeedRecord}
+      />
+
+      <GoogleSheetsModal
+        isOpen={isGoogleSheetsOpen}
+        onClose={() => setIsGoogleSheetsOpen(false)}
+        goats={goats}
+        onImportSuccess={handleImportGoatsFromSheets}
+        onNotification={showNotification}
       />
 
     </div>

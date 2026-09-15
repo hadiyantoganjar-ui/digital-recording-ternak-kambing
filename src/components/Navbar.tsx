@@ -8,7 +8,8 @@ import {
   ListOrdered, 
   Layers, 
   Sparkles,
-  Smartphone
+  Smartphone,
+  FileSpreadsheet
 } from 'lucide-react';
 
 interface NavbarProps {
@@ -18,6 +19,7 @@ interface NavbarProps {
   onOpenAddModal: () => void;
   onExportCsv: () => void;
   onResetData: () => void;
+  onOpenGoogleSheets: () => void;
   totalGoats: number;
 }
 
@@ -28,6 +30,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenAddModal,
   onExportCsv,
   onResetData,
+  onOpenGoogleSheets,
   totalGoats,
 }) => {
   return (
@@ -86,6 +89,17 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Action Buttons */}
           <div className="flex items-center gap-2">
+            {/* Google Sheets Integration */}
+            <button
+              id="btn-google-sheets"
+              onClick={onOpenGoogleSheets}
+              className="flex items-center gap-1.5 bg-emerald-800 hover:bg-emerald-750 border border-emerald-500/50 text-white font-semibold px-3 py-2 sm:px-3.5 sm:py-2 rounded-xl text-xs sm:text-sm shadow-sm transition-transform active:scale-95"
+              title="Integrasi & Sinkronisasi Google Sheets"
+            >
+              <FileSpreadsheet className="w-4 h-4 text-emerald-300" />
+              <span className="hidden lg:inline">Google</span> Sheets
+            </button>
+
             {/* Scan RFID Button */}
             <button
               id="btn-scan-rfid"
@@ -149,6 +163,14 @@ export const Navbar: React.FC<NavbarProps> = ({
         >
           <BarChart3 className="w-3.5 h-3.5" />
           Olah Data
+        </button>
+        <button
+          onClick={onOpenGoogleSheets}
+          className="flex items-center gap-1.5 py-1 px-2.5 rounded-md text-emerald-300 hover:text-white"
+          title="Google Sheets"
+        >
+          <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-300" />
+          Sheets
         </button>
         <button
           onClick={onExportCsv}
