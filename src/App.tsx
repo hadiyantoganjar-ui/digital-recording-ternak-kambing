@@ -10,8 +10,14 @@ import { GoatFormModal } from './components/GoatFormModal';
 import { HealthRecordModal } from './components/HealthRecordModal';
 import { WeightRecordModal } from './components/WeightRecordModal';
 import { FeedRecordModal } from './components/FeedRecordModal';
+import { EstrusRecordModal } from './components/EstrusRecordModal';
+import { EstrusAlarmCenterModal } from './components/EstrusAlarmCenterModal';
 import { AnalyticsView } from './components/AnalyticsView';
 import { GoogleSheetsModal } from './components/GoogleSheetsModal';
+import { OfflineSyncModal } from './components/OfflineSyncModal';
+import { OfflineSyncIndicator } from './components/OfflineSyncIndicator';
+import { useOfflineSync, addToOfflineQueue } from './services/offlineSync';
+import { hitungPrediksiSiklusBirahi } from './utils/livestockScience';
 import { Radio, Plus, Layers } from 'lucide-react';
 
 export default function App() {
@@ -38,8 +44,33 @@ export default function App() {
   const [goatForQuickWeight, setGoatForQuickWeight] = useState<GoatRecord | null>(null);
   const [goatForQuickHealth, setGoatForQuickHealth] = useState<GoatRecord | null>(null);
   const [goatForQuickFeed, setGoatForQuickFeed] = useState<GoatRecord | null>(null);
+  const [goatForEstrusRecord, setGoatForEstrusRecord] = useState<GoatRecord | null>(null);
+  const [isEstrusAlarmCenterOpen, setIsEstrusAlarmCenterOpen] = useState(false);
+  const [isOfflineSyncModalOpen, setIsOfflineSyncModalOpen] = useState(false);
   const [isGoogleSheetsOpen, setIsGoogleSheetsOpen] = useState(false);
   const [notification, setNotification] = useState<string | null>(null);
+
+  // Offline and network synchronization hook
+  const {
+    isOnline,
+    pendingCount,
+    queue: offlineQueue,
+    isSyncing,
+    lastSyncTime,
+    executeSync,
+    clearSyncedHistory,
+  } = useOfflineSync((syncedCount) => {
+    showNotification(`Koneksi pulih! ${syncedCount} catatan rekaman lapangan berhasil disinkronkan.`);
+  });
+
+  // Active alarm count for reproduction cycle
+  const estrusAlarmCount = useMemo(() => {
+    return goats.filter((g) => {
+      if (g.jenisKelamin !== 'Betina') return false;
+      const pred = hitungPrediksiSiklusBirahi(g);
+      return pred.isEligible && pred.isAlarmActive;
+    }).length;
+  }, [goats]);
 
   const showNotification = (msg: string) => {
     setNotification(msg);
@@ -59,9 +90,11 @@ export default function App() {
 
   // Handlers
   const handleSaveGoat = (goatToSave: GoatRecord) => {
+    let isExisting = false;
     updateGoatsState((prev) => {
       const idx = prev.findIndex((g) => g.id === goatToSave.id);
       if (idx >= 0) {
+        isExisting = true;
         const next = [...prev];
         next[idx] = goatToSave;
         return next;
@@ -70,16 +103,39 @@ export default function App() {
       }
     });
 
+    // Catat ke antrean sinkronisasi offline
+    addToOfflineQueue({
+      action: isExisting ? 'EDIT_TERNAK' : 'TAMBAH_TERNAK',
+      nomorEartag: goatToSave.nomorEartag,
+      namaPeternak: goatToSave.namaPeternak,
+      deskripsi: isExisting 
+        ? `Perbarui profil kambing #${goatToSave.nomorEartag} (${goatToSave.bangsaTernak})`
+        : `Registrasi ternak baru #${goatToSave.nomorEartag} (${goatToSave.bangsaTernak})`,
+    });
+
     // Update detail modal if open
     if (selectedGoatForDetail && selectedGoatForDetail.id === goatToSave.id) {
       setSelectedGoatForDetail(goatToSave);
     }
 
-    showNotification(`Data ternak eartag #${goatToSave.nomorEartag} berhasil disimpan.`);
+    showNotification(
+      !isOnline
+        ? `[Tersimpan Lokal] Data eartag #${goatToSave.nomorEartag} disimpan & siap disinkronkan saat online.`
+        : `Data ternak eartag #${goatToSave.nomorEartag} berhasil disimpan.`
+    );
   };
 
   const handleDeleteGoat = (id: string) => {
+    const target = goats.find((g) => g.id === id);
     if (window.confirm('Apakah Anda yakin ingin menghapus data ternak ini dari sistem digital recording?')) {
+      if (target) {
+        addToOfflineQueue({
+          action: 'HAPUS_TERNAK',
+          nomorEartag: target.nomorEartag,
+          namaPeternak: target.peternak,
+          deskripsi: `Penghapusan ternak #${target.nomorEartag}`,
+        });
+      }
       updateGoatsState((prev) => prev.filter((g) => g.id !== id));
       if (selectedGoatForDetail?.id === id) setSelectedGoatForDetail(null);
       showNotification('Data ternak berhasil dihapus.');
@@ -95,6 +151,16 @@ export default function App() {
     lingkarDadaCm?: number,
     petugasPenimbang?: string
   ) => {
+    const target = goats.find((g) => g.id === goatId);
+    if (target) {
+      addToOfflineQueue({
+        action: 'TIMBANG_BOBOT',
+        nomorEartag: target.nomorEartag,
+        namaPeternak: target.peternak,
+        deskripsi: `Timbang cepat: ${newBobot} kg (${tanggal})`,
+      });
+    }
+
     updateGoatsState((prev) =>
       prev.map((g) => {
         if (g.id !== goatId) return g;
@@ -130,6 +196,16 @@ export default function App() {
     record: RiwayatBobot,
     recordIndex?: number
   ) => {
+    const target = goats.find((g) => g.id === goatId);
+    if (target) {
+      addToOfflineQueue({
+        action: 'TIMBANG_BOBOT',
+        nomorEartag: target.nomorEartag,
+        namaPeternak: target.peternak,
+        deskripsi: `Riwayat bobot: ${record.bobot} kg (${record.tanggal})`,
+      });
+    }
+
     updateGoatsState((prev) =>
       prev.map((g) => {
         if (g.id !== goatId) return g;
@@ -207,6 +283,16 @@ export default function App() {
     record: CatatanKesehatan,
     newStatus: StatusKesehatanUtama
   ) => {
+    const target = goats.find((g) => g.id === goatId);
+    if (target) {
+      addToOfflineQueue({
+        action: 'CATAT_MEDIS',
+        nomorEartag: target.nomorEartag,
+        namaPeternak: target.peternak,
+        deskripsi: `Kesehatan: ${record.jenisPenyakit} - ${newStatus}`,
+      });
+    }
+
     updateGoatsState((prev) =>
       prev.map((g) => {
         if (g.id !== goatId) return g;
@@ -227,6 +313,16 @@ export default function App() {
   };
 
   const handleSaveFeedRecord = (goatId: string, record: CatatanPakanHarian) => {
+    const target = goats.find((g) => g.id === goatId);
+    if (target) {
+      addToOfflineQueue({
+        action: 'CATAT_PAKAN',
+        nomorEartag: target.nomorEartag,
+        namaPeternak: target.peternak,
+        deskripsi: `Pakan: ${record.jenisPakan} (${record.jumlahKg} kg)`,
+      });
+    }
+
     updateGoatsState((prev) =>
       prev.map((g) => {
         if (g.id !== goatId) return g;
@@ -342,7 +438,13 @@ export default function App() {
         onExportCsv={handleExportCsv}
         onResetData={handleResetData}
         onOpenGoogleSheets={() => setIsGoogleSheetsOpen(true)}
+        onOpenEstrusAlarmCenter={() => setIsEstrusAlarmCenterOpen(true)}
+        estrusAlarmCount={estrusAlarmCount}
         totalGoats={goats.length}
+        isOnline={isOnline}
+        pendingSyncCount={pendingCount}
+        isSyncing={isSyncing}
+        onOpenOfflineSyncModal={() => setIsOfflineSyncModalOpen(true)}
       />
 
       {/* Notification Toast */}
@@ -357,7 +459,11 @@ export default function App() {
       <main className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 flex-1 w-full">
         
         {/* Top KPI Metrics */}
-        <DashboardStats goats={goats} onSelectQuickFilter={handleQuickFilter} />
+        <DashboardStats 
+          goats={goats} 
+          onSelectQuickFilter={handleQuickFilter}
+          onOpenEstrusAlarmCenter={() => setIsEstrusAlarmCenterOpen(true)} 
+        />
 
         {/* View Switcher: Data Table vs Analytics */}
         {activeTab === 'data' ? (
@@ -374,6 +480,7 @@ export default function App() {
             onOpenQuickWeight={(g) => setGoatForQuickWeight(g)}
             onOpenQuickHealth={(g) => setGoatForQuickHealth(g)}
             onOpenFeedRecord={(g) => setGoatForQuickFeed(g)}
+            onOpenEstrusRecord={(g) => setGoatForEstrusRecord(g)}
           />
         ) : (
           <AnalyticsView
@@ -417,6 +524,9 @@ export default function App() {
         onOpenFeedRecord={(g) => {
           setGoatForQuickFeed(g);
         }}
+        onOpenEstrusRecord={(g) => {
+          setGoatForEstrusRecord(g);
+        }}
         onRegisterNewRfid={(rfid) => {
           setGoatToEdit(null);
           setNewRfidPrefill(rfid);
@@ -437,6 +547,9 @@ export default function App() {
           onOpenFeedRecord={(g) => {
             setGoatForQuickFeed(g);
           }}
+          onOpenEstrusRecord={(g) => {
+            setGoatForEstrusRecord(g);
+          }}
           onEditGoat={(g) => {
             setGoatToEdit(g);
             setIsGoatFormOpen(true);
@@ -445,6 +558,43 @@ export default function App() {
           onDeleteWeightRecord={handleDeleteWeightRecord}
         />
       )}
+
+      {goatForEstrusRecord && (
+        <EstrusRecordModal
+          goat={goatForEstrusRecord}
+          onClose={() => setGoatForEstrusRecord(null)}
+          onSave={(updatedGoat) => {
+            addToOfflineQueue({
+              action: 'CATAT_BIRAHI',
+              nomorEartag: updatedGoat.nomorEartag,
+              namaPeternak: updatedGoat.namaPeternak,
+              deskripsi: `Siklus birahi: ${updatedGoat.statusReproduksi || 'Observasi'} (${updatedGoat.tanggalBirahiTerakhir || 'Tercatat'})`,
+            });
+            updateGoatsState((prev) =>
+              prev.map((g) => (g.id === updatedGoat.id ? updatedGoat : g))
+            );
+            if (selectedGoatForDetail?.id === updatedGoat.id) {
+              setSelectedGoatForDetail(updatedGoat);
+            }
+            setGoatForEstrusRecord(null);
+            showNotification(`Siklus birahi kambing #${updatedGoat.nomorEartag} berhasil disimpan.`);
+          }}
+        />
+      )}
+
+      <EstrusAlarmCenterModal
+        isOpen={isEstrusAlarmCenterOpen}
+        onClose={() => setIsEstrusAlarmCenterOpen(false)}
+        goats={goats}
+        onSelectGoat={(g) => {
+          setSelectedGoatForDetail(g);
+          setIsEstrusAlarmCenterOpen(false);
+        }}
+        onOpenRecordEstrus={(g) => {
+          setIsEstrusAlarmCenterOpen(false);
+          setGoatForEstrusRecord(g);
+        }}
+      />
 
       <GoatFormModal
         isOpen={isGoatFormOpen}
@@ -486,6 +636,28 @@ export default function App() {
         goats={goats}
         onImportSuccess={handleImportGoatsFromSheets}
         onNotification={showNotification}
+      />
+
+      {/* Floating Offline Sync Status Indicator */}
+      <OfflineSyncIndicator
+        isOnline={isOnline}
+        pendingCount={pendingCount}
+        isSyncing={isSyncing}
+        onOpenModal={() => setIsOfflineSyncModalOpen(true)}
+        variant="floating"
+      />
+
+      {/* Offline Sync & Cache Center Modal */}
+      <OfflineSyncModal
+        isOpen={isOfflineSyncModalOpen}
+        onClose={() => setIsOfflineSyncModalOpen(false)}
+        isOnline={isOnline}
+        pendingCount={pendingCount}
+        queue={offlineQueue}
+        isSyncing={isSyncing}
+        lastSyncTime={lastSyncTime}
+        onSyncNow={executeSync}
+        onClearHistory={clearSyncedHistory}
       />
 
     </div>

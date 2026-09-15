@@ -15,7 +15,8 @@ import {
   PlusCircle, 
   Sparkles,
   Zap,
-  Wheat
+  Wheat,
+  Heart
 } from 'lucide-react';
 
 interface RfidScannerModalProps {
@@ -26,6 +27,7 @@ interface RfidScannerModalProps {
   onOpenQuickWeight: (goat: GoatRecord) => void;
   onOpenQuickHealth: (goat: GoatRecord) => void;
   onOpenFeedRecord?: (goat: GoatRecord) => void;
+  onOpenEstrusRecord?: (goat: GoatRecord) => void;
   onRegisterNewRfid: (rfidNumber: string) => void;
 }
 
@@ -37,6 +39,7 @@ export const RfidScannerModal: React.FC<RfidScannerModalProps> = ({
   onOpenQuickWeight,
   onOpenQuickHealth,
   onOpenFeedRecord,
+  onOpenEstrusRecord,
   onRegisterNewRfid,
 }) => {
   const [scannedCode, setScannedCode] = useState('');
@@ -304,6 +307,19 @@ export const RfidScannerModal: React.FC<RfidScannerModalProps> = ({
                   >
                     <Wheat className="w-3.5 h-3.5 text-emerald-700" />
                     <span>Catat Pakan</span>
+                  </button>
+                )}
+                {onOpenEstrusRecord && matchedGoat.jenisKelamin === 'Betina' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      onOpenEstrusRecord(matchedGoat);
+                    }}
+                    className="bg-rose-50 border border-rose-200 hover:bg-rose-100 text-rose-800 font-bold py-2 px-3 rounded-xl text-xs flex items-center gap-1 transition-colors"
+                  >
+                    <Heart className="w-3.5 h-3.5 text-rose-600 fill-rose-600" />
+                    <span>Pantau Birahi</span>
                   </button>
                 )}
               </div>

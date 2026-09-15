@@ -14,6 +14,7 @@ import {
   AlertCircle, 
   Clock, 
   TrendingUp,
+  TrendingDown,
   FileText,
   Printer,
   Copy,
@@ -25,15 +26,30 @@ import {
   Zap,
   Info,
   Pencil,
-  Trash2
+  Trash2,
+  Store,
+  RotateCw,
+  ArrowUpRight,
+  ArrowDownRight,
+  Minus,
+  Heart,
+  Flame,
+  Volume2
 } from 'lucide-react';
 import { 
   hitungAdgAntarTimbang, 
   hitungPrediksiHargaKambing, 
   hitungKebutuhanPakanHarian,
   hitungEfisiensiPakanAntarTimbang,
-  formatRupiah 
+  formatRupiah,
+  hitungPrediksiSiklusBirahi,
+  formatTanggalIndo
 } from '../utils/livestockScience';
+import { 
+  useLampungMarketRealtime, 
+  hitungPrediksiHargaRealtimeArea 
+} from '../services/lampungMarketRealtime';
+import { playEstrusAlarmSound } from '../utils/storage';
 import { WeightTrendChart } from './WeightTrendChart';
 import { EditWeightModal } from './EditWeightModal';
 
@@ -43,6 +59,7 @@ interface GoatDetailModalProps {
   onOpenQuickWeight: (goat: GoatRecord) => void;
   onOpenQuickHealth: (goat: GoatRecord) => void;
   onOpenFeedRecord?: (goat: GoatRecord) => void;
+  onOpenEstrusRecord?: (goat: GoatRecord) => void;
   onEditGoat: (goat: GoatRecord) => void;
   onSaveWeightRecord?: (goatId: string, record: RiwayatBobot, recordIndex?: number) => void;
   onDeleteWeightRecord?: (goatId: string, recordIndex: number) => void;
@@ -54,11 +71,12 @@ export const GoatDetailModal: React.FC<GoatDetailModalProps> = ({
   onOpenQuickWeight,
   onOpenQuickHealth,
   onOpenFeedRecord,
+  onOpenEstrusRecord,
   onEditGoat,
   onSaveWeightRecord,
   onDeleteWeightRecord,
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'profil' | 'bobot' | 'kesehatan' | 'pakan' | 'harga'>('profil');
+  const [activeSubTab, setActiveSubTab] = useState<'profil' | 'bobot' | 'kesehatan' | 'pakan' | 'harga' | 'reproduksi'>('profil');
   const [copied, setCopied] = useState(false);
 
   // State untuk Tambah & Edit Penimbangan
@@ -92,19 +110,67 @@ export const GoatDetailModal: React.FC<GoatDetailModalProps> = ({
 
   if (!goat) return null;
 
+  // Real-time market state hook
+  const {
+    markets,
+    selectedMarketId,
+    selectedMarket,
+    isAutoUpdateActive,
+    lastUpdatedTime,
+    secondsUntilNextTick,
+    averageJantanKurban,
+    averageBetinaInduk,
+    setSelectedMarketId,
+    manualRefresh,
+  } = useLampungMarketRealtime();
+
+  const [isRefreshingMarket, setIsRefreshingMarket] = useState(false);
+  const handleModalRefresh = () => {
+    setIsRefreshingMarket(true);
+    manualRefresh();
+    setTimeout(() => setIsRefreshingMarket(false), 600);
+  };
+
   const copyRfid = () => {
     navigator.clipboard.writeText(goat.nomorRfid);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
 
-  // Prediksi harga jual ternak kambing di Lampung
-  const prediksiHarga = hitungPrediksiHargaKambing(
-    goat.bobotBadan,
-    goat.jenisKelamin,
-    goat.bangsaTernak,
-    goat.umur
-  );
+  // Prediksi harga jual ternak kambing terintegrasi bursa real-time Lampung
+  const prediksiHarga = useMemo(() => {
+    return hitungPrediksiHargaRealtimeArea(
+      goat.bobotBadan,
+      goat.jenisKelamin,
+      goat.bangsaTernak,
+      goat.umur,
+      selectedMarket,
+      averageJantanKurban,
+      averageBetinaInduk
+    );
+  }, [goat.bobotBadan, goat.jenisKelamin, goat.bangsaTernak, goat.umur, selectedMarket, averageJantanKurban, averageBetinaInduk]);
+
+  // Komparasi valuasi ternak spesifik ini di 6 pasar hewan Lampung sekaligus
+  const marketComparisons = useMemo(() => {
+    return markets.map((m) => {
+      const pred = hitungPrediksiHargaRealtimeArea(
+        goat.bobotBadan,
+        goat.jenisKelamin,
+        goat.bangsaTernak,
+        goat.umur,
+        m,
+        averageJantanKurban,
+        averageBetinaInduk
+      );
+      return {
+        market: m,
+        estimasiHarga: pred.estimasiHargaTotal,
+        selisih: pred.selisihVsProvinsi || 0,
+        rangeMin: pred.rangeHargaMin,
+        rangeMax: pred.rangeHargaMax,
+      };
+    });
+  }, [goat.bobotBadan, goat.jenisKelamin, goat.bangsaTernak, goat.umur, markets, averageJantanKurban, averageBetinaInduk]);
 
   // Kebutuhan nutrisi pakan harian
   const nutrisiHarian = hitungKebutuhanPakanHarian(goat.bobotBadan);
@@ -280,6 +346,25 @@ export const GoatDetailModal: React.FC<GoatDetailModalProps> = ({
             <HeartPulse className="w-3.5 h-3.5" />
             Kesehatan ({goat.riwayatKesehatan?.length || 0})
           </button>
+          {goat.jenisKelamin === 'Betina' && (() => {
+            const pred = hitungPrediksiSiklusBirahi(goat);
+            return (
+              <button
+                onClick={() => setActiveSubTab('reproduksi')}
+                className={`py-2 px-2.5 border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                  activeSubTab === 'reproduksi'
+                    ? 'border-rose-600 text-rose-800 font-bold bg-white rounded-t-lg shadow-2xs'
+                    : 'border-transparent hover:text-slate-900 text-slate-700'
+                }`}
+              >
+                <Heart className={`w-3.5 h-3.5 ${pred.isAlarmActive ? 'text-rose-600 fill-rose-600 animate-pulse' : 'text-rose-500'}`} />
+                <span>Siklus Birahi</span>
+                {pred.isAlarmActive && (
+                  <span className="w-2 h-2 rounded-full bg-rose-600 animate-ping" />
+                )}
+              </button>
+            );
+          })()}
         </div>
 
         {/* Tab Content */}
@@ -544,57 +629,201 @@ export const GoatDetailModal: React.FC<GoatDetailModalProps> = ({
             </div>
           )}
 
-          {/* 3. Tab Valuasi Harga Jual Pasar Lampung */}
+          {/* 3. Tab Valuasi Harga Jual Pasar Lampung (Real-time Live Market) */}
           {activeSubTab === 'harga' && (
             <div className="space-y-4 text-xs">
-              <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-200 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-emerald-950 text-sm flex items-center gap-1.5">
-                    <Coins className="w-4 h-4 text-emerald-700" />
-                    Prediksi Harga Pasar Hewan Lampung
-                  </span>
+              {/* Real-time Ticker & Area Control Bar */}
+              <div className="bg-slate-900 text-white p-3.5 rounded-2xl border border-slate-800 space-y-3">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <div className="relative flex items-center justify-center">
+                      <div className={`w-2.5 h-2.5 rounded-full ${isAutoUpdateActive ? 'bg-emerald-500 animate-ping' : 'bg-amber-500'} absolute opacity-75`} />
+                      <div className={`w-2 h-2 rounded-full ${isAutoUpdateActive ? 'bg-emerald-400' : 'bg-amber-400'} relative`} />
+                    </div>
+                    <span className="font-black text-xs text-white flex items-center gap-1.5">
+                      <Radio className="w-3.5 h-3.5 text-emerald-400" />
+                      Live Bursa Pasar Hewan Lampung
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-mono">
+                      {lastUpdatedTime} WIB
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] text-slate-400 font-mono bg-slate-800 px-2 py-0.5 rounded-md border border-slate-700">
+                      {isAutoUpdateActive ? `Update dlm ${secondsUntilNextTick}s` : 'Dijeda'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleModalRefresh}
+                      title="Segarkan harga pasar"
+                      className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 transition-colors border border-slate-700 active:scale-95"
+                    >
+                      <RotateCw className={`w-3 h-3 ${isRefreshingMarket ? 'animate-spin text-emerald-400' : ''}`} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Area Selector Pills */}
+                <div className="space-y-1">
+                  <span className="text-[10px] font-bold text-slate-400 block">Pilih Area Pasar Rujukan:</span>
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedMarketId('all')}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all ${
+                        selectedMarketId === 'all'
+                          ? 'bg-emerald-500 text-slate-950 shadow-xs'
+                          : 'bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700'
+                      }`}
+                    >
+                      Semua Lampung (Rata-rata)
+                    </button>
+                    {markets.map((m) => {
+                      const isSelected = selectedMarketId === m.id;
+                      return (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={() => setSelectedMarketId(m.id)}
+                          className={`px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all flex items-center gap-1 ${
+                            isSelected
+                              ? 'bg-emerald-500 text-slate-950 shadow-xs'
+                              : 'bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700'
+                          }`}
+                        >
+                          <span>{m.namaPasar.replace('Pasar Hewan ', '')}</span>
+                          <span className={`text-[9px] font-mono ${
+                            m.tren === 'naik' ? 'text-emerald-300' : m.tren === 'turun' ? 'text-rose-300' : 'text-slate-400'
+                          }`}>
+                            {m.tren === 'naik' ? '↗' : m.tren === 'turun' ? '↘' : '—'}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* Box Estimasi Harga Terpilih */}
+              <div className="p-4 bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl border border-emerald-200 space-y-3">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-bold text-emerald-950 text-sm flex items-center gap-1.5">
+                      <Coins className="w-4 h-4 text-emerald-700" />
+                      Estimasi Nilai Jual:
+                    </span>
+                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-200 text-emerald-900 border border-emerald-300">
+                      {prediksiHarga.namaAreaPasar}
+                    </span>
+                  </div>
                   <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-700 text-white shadow-2xs">
                     {prediksiHarga.kategoriPasar}
                   </span>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 pt-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                   <div className="bg-white p-3 rounded-xl border border-emerald-200">
                     <span className="text-[10px] text-slate-400 font-bold block uppercase">Estimasi Harga Jual</span>
-                    <span className="text-xl font-black text-emerald-900 block mt-0.5">
+                    <span className="text-2xl font-black text-emerald-900 block mt-0.5">
                       {formatRupiah(prediksiHarga.estimasiHargaTotal)}
                     </span>
-                    <span className="text-[10px] text-slate-500">
-                      Timbang hidup {goat.bobotBadan} kg @ ~{formatRupiah(prediksiHarga.hargaDasarPerKg)}/kg
-                    </span>
+                    <div className="flex items-center justify-between text-[10px] text-slate-500 mt-1">
+                      <span>Bobot {goat.bobotBadan} kg @ ~{formatRupiah(prediksiHarga.hargaDasarPerKg)}/kg</span>
+                      {selectedMarket && prediksiHarga.selisihVsProvinsi !== 0 && (
+                        <span className={`font-bold ${prediksiHarga.selisihVsProvinsi > 0 ? 'text-emerald-700' : 'text-slate-600'}`}>
+                          {prediksiHarga.selisihVsProvinsi > 0 ? '▲ +' : '▼ '}{formatRupiah(prediksiHarga.selisihVsProvinsi)} vs Provinsi
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   <div className="bg-white p-3 rounded-xl border border-emerald-200">
                     <span className="text-[10px] text-slate-400 font-bold block uppercase">Rentang Tawar Menawar</span>
-                    <span className="text-sm font-bold text-slate-800 block mt-0.5">
+                    <span className="text-base font-bold text-slate-800 block mt-0.5">
                       {formatRupiah(prediksiHarga.rangeHargaMin)} - {formatRupiah(prediksiHarga.rangeHargaMax)}
                     </span>
-                    <span className="text-[10px] text-slate-400">Toleransi pasar ±7%</span>
+                    <span className="text-[10px] text-slate-400 block mt-1">Toleransi tawar-menawar pasar ±7%</span>
                   </div>
                 </div>
 
                 <div className="text-[11px] text-slate-600 bg-white/80 p-2.5 rounded-xl border border-emerald-100 space-y-1">
-                  <strong className="text-slate-800 block">Faktor Penyesuaian Ilmiah (Regresi Pasar):</strong>
-                  <div className="grid grid-cols-3 gap-1 text-[10px]">
-                    <div>Faktor Kelamin: <strong>{prediksiHarga.faktorKelamin}x</strong> ({goat.jenisKelamin})</div>
-                    <div>Faktor Bangsa: <strong>{prediksiHarga.faktorBangsa}x</strong> ({goat.bangsaTernak})</div>
-                    <div>Faktor Umur: <strong>{prediksiHarga.faktorKelayakan}x</strong> ({goat.umur})</div>
+                  <strong className="text-slate-800 block text-[11px]">Parameter Perhitungan Ilmiah &amp; Regional:</strong>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-1 text-[10px]">
+                    <div>Sex: <strong>{prediksiHarga.faktorKelamin}x</strong> ({goat.jenisKelamin})</div>
+                    <div>Bangsa: <strong>{prediksiHarga.faktorBangsa}x</strong> ({goat.bangsaTernak})</div>
+                    <div>Gigi/Umur: <strong>{prediksiHarga.faktorKelayakan}x</strong> ({goat.umur})</div>
+                    <div>Faktor Area: <strong>{(prediksiHarga.faktorArea || 1.0).toFixed(3)}x</strong></div>
                   </div>
+                </div>
+              </div>
+
+              {/* Komparasi Nilai Ternak Ini di 6 Pasar Hewan Lampung (Live) */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
+                    <Store className="w-3.5 h-3.5 text-emerald-700" />
+                    Komparasi Nilai Ternak Ini di 6 Pasar Hewan Lampung (Live)
+                  </span>
+                  <span className="text-[10px] text-slate-400">Klik pasar untuk memilih</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {marketComparisons.map((item) => {
+                    const isCurrent = selectedMarketId === item.market.id;
+                    return (
+                      <div
+                        key={item.market.id}
+                        onClick={() => setSelectedMarketId(item.market.id)}
+                        className={`p-2.5 rounded-xl border transition-all cursor-pointer ${
+                          isCurrent
+                            ? 'bg-emerald-50 border-emerald-400 ring-2 ring-emerald-200 shadow-xs'
+                            : 'bg-white hover:bg-slate-50 border-slate-200'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <div className="font-bold text-slate-900 text-xs flex items-center gap-1">
+                              {item.market.namaPasar}
+                              {isCurrent && (
+                                <span className="text-[9px] font-bold px-1 rounded bg-emerald-600 text-white">
+                                  Aktif
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[10px] text-slate-500">
+                              {item.market.wilayah} • Hari: {item.market.hariPasaran}
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="font-black text-emerald-900 text-xs">
+                              {formatRupiah(item.estimasiHarga)}
+                            </div>
+                            <div className={`text-[9px] font-bold ${
+                              item.selisih > 0 ? 'text-emerald-700' : item.selisih < 0 ? 'text-slate-500' : 'text-slate-400'
+                            }`}>
+                              {item.selisih > 0 ? `▲ +${formatRupiah(item.selisih)}` : item.selisih < 0 ? `▼ ${formatRupiah(item.selisih)}` : 'Sama dg rerata'}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="mt-1.5 pt-1 border-t border-slate-100 flex items-center justify-between text-[9px] text-slate-500">
+                          <span>Live: {formatRupiah(item.market.hargaTimbangJantanKurban)}/kg</span>
+                          <span className="font-semibold text-emerald-800">{item.market.statusBursa}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
               {/* Referensi Pasar Lampung */}
               <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 text-slate-600 space-y-1">
                 <span className="font-bold text-slate-800 block text-[11px]">
-                  📌 Acuan Pasar Ternak Lampung (Sukanegara, Sukoharjo, Tanggamus):
+                  📌 Rekomendasi Penjualan Peternak:
                 </span>
-                <p className="text-[10px]">
-                  Kambing jantan kurban hidup di Lampung berkisar <strong>Rp 80.000 - Rp 95.000/kg</strong> bobot hidup, sedangkan kambing betina/indukan berkisar <strong>Rp 65.000 - Rp 75.000/kg</strong>. Ternak jantan yang telah poel (I1 ke atas) dan berbobot di atas 26 kg mendapatkan premi kelayakan kurban.
+                <p className="text-[10px] leading-relaxed">
+                  Jika target penjualan adalah pasar konsumen langsung atau akikah di perkotaan, <strong>Pasar Sentra Bandar Lampung</strong> &amp; <strong>Pasar Sidomulyo</strong> memberikan apresiasi harga timbang tertinggi (+4% s.d +6.5%). Pastikan menjual pada hari pasaran utama yang aktif untuk mendapatkan volume pembeli maksimal.
                 </p>
               </div>
             </div>
@@ -774,6 +1003,244 @@ export const GoatDetailModal: React.FC<GoatDetailModalProps> = ({
                   <p className="text-[11px] text-slate-400 mt-0.5">Belum ada catatan diagnosa penyakit.</p>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* 6. Tab Siklus Birahi & Reproduksi */}
+          {activeSubTab === 'reproduksi' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                    <Heart className="w-4 h-4 text-rose-600 fill-rose-600" />
+                    <span>Prediksi Siklus Birahi & Reproduksi</span>
+                  </h4>
+                  <p className="text-xs text-slate-500">
+                    Siklus estrus kambing berkisar 19 - 21 hari (rata-rata 21 hari)
+                  </p>
+                </div>
+                {onOpenEstrusRecord && goat.jenisKelamin === 'Betina' && (
+                  <button
+                    type="button"
+                    onClick={() => onOpenEstrusRecord(goat)}
+                    className="inline-flex items-center gap-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold px-3 py-1.5 rounded-xl text-xs shadow-xs"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Catat / Perbarui Birahi
+                  </button>
+                )}
+              </div>
+
+              {goat.jenisKelamin !== 'Betina' ? (
+                <div className="p-6 bg-slate-50 rounded-2xl border border-slate-200 text-center text-slate-500">
+                  <p className="font-bold text-slate-700">Ternak Jantan</p>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Manajemen siklus birahi (estrus) hanya berlaku untuk ternak kambing betina.
+                  </p>
+                </div>
+              ) : goat.statusReproduksi === 'Bunting' ? (
+                <div className="p-5 bg-purple-50 rounded-2xl border border-purple-200 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">🍼</span>
+                    <div>
+                      <h5 className="font-bold text-purple-900 text-sm">Status: Sedang Bunting (Gestasi)</h5>
+                      <p className="text-xs text-purple-700">
+                        Siklus estrus dinonaktifkan sementara karena ternak dalam masa kebuntingan (~150 hari).
+                      </p>
+                    </div>
+                  </div>
+                  <div className="p-3 bg-white/80 rounded-xl text-xs text-slate-600 mt-2 border border-purple-100">
+                    💡 <strong>Panduan Peternak:</strong> Pastikan asupan nutrisi pakan berkualitas tinggi dan hindari stres atau perlakuan kasar untuk mencegah keguguran cempe.
+                  </div>
+                </div>
+              ) : (() => {
+                const pred = hitungPrediksiSiklusBirahi(goat);
+
+                if (!pred.isEligible) {
+                  return (
+                    <div className="p-6 bg-amber-50/70 rounded-2xl border border-amber-200 text-center space-y-3">
+                      <div className="w-12 h-12 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center mx-auto">
+                        <AlertCircle className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <h5 className="font-bold text-slate-800 text-sm">Belum Ada Data Riwayat Birahi</h5>
+                        <p className="text-xs text-slate-600 max-w-md mx-auto mt-1 leading-relaxed">
+                          Sesuai kaidah reproduksi ternak, prediksi estrus baru dapat dihitung setelah tanggal pengamatan birahi pertama kali dicatat di lapangan. Sistem tidak membuat estimasi fiktif tanpa data riil.
+                        </p>
+                      </div>
+                      {onOpenEstrusRecord && (
+                        <button
+                          type="button"
+                          onClick={() => onOpenEstrusRecord(goat)}
+                          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-xs transition-colors"
+                        >
+                          <Plus className="w-4 h-4" />
+                          Rekam Pengamatan Birahi Pertama
+                        </button>
+                      )}
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="space-y-4">
+                    {/* Status Card Real-time */}
+                    <div className={`p-4 rounded-2xl border ${
+                      pred.isAlarmActive 
+                        ? 'bg-rose-50 border-rose-300 ring-2 ring-rose-400' 
+                        : 'bg-slate-50 border-slate-200'
+                    }`}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-black ${pred.badgeColor}`}>
+                              {pred.statusFase === 'BIRAHI_AKTIF' && <Flame className="w-3.5 h-3.5 text-rose-600 fill-rose-600" />}
+                              {pred.statusFase === 'SIAGA_PROESTRUS' && <Heart className="w-3.5 h-3.5 text-amber-600 fill-amber-500" />}
+                              {pred.badgeLabel}
+                            </span>
+                            {pred.isAlarmActive && (
+                              <span className="text-[10px] font-bold text-rose-700 uppercase tracking-wider animate-pulse">
+                                🚨 ALARM AKTIF
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs font-bold text-slate-800 mt-1">
+                            {pred.pesanAlarm}
+                          </p>
+                        </div>
+
+                        {pred.isAlarmActive && (
+                          <button
+                            type="button"
+                            onClick={() => playEstrusAlarmSound()}
+                            className="p-2 rounded-xl bg-rose-600 text-white hover:bg-rose-700 shadow-xs flex items-center gap-1 text-xs font-bold transition-transform active:scale-95"
+                            title="Bunyikan Alarm Birahi"
+                          >
+                            <Volume2 className="w-4 h-4" />
+                            <span className="hidden sm:inline">Bunyi Alarm</span>
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Progress bar siklus 21 hari */}
+                      <div className="mt-4 pt-3 border-t border-slate-200/80">
+                        <div className="flex items-center justify-between text-xs text-slate-600 mb-1.5">
+                          <span>
+                            Siklus Berjalan: <strong>Hari ke-{pred.hariKeDalamSiklus}</strong> dari 21 hari
+                          </span>
+                          <span className="font-bold text-slate-800">
+                            {Math.round(pred.persentaseSiklusBerjalan)}%
+                          </span>
+                        </div>
+                        <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full transition-all duration-500 ${
+                              pred.statusFase === 'BIRAHI_AKTIF'
+                                ? 'bg-rose-600'
+                                : pred.statusFase === 'SIAGA_PROESTRUS'
+                                ? 'bg-amber-500'
+                                : 'bg-emerald-600'
+                            }`}
+                            style={{ width: `${Math.min(100, Math.max(0, pred.persentaseSiklusBerjalan))}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Timeline & Jadwal Kritis */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                      <div className="p-3 bg-white rounded-xl border border-slate-200">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                          Birahi Terakhir Dicatat
+                        </span>
+                        <span className="font-bold text-slate-800 mt-1 block">
+                          {formatTanggalIndo(pred.tanggalBirahiTerakhir)}
+                        </span>
+                      </div>
+                      <div className="p-3 bg-white rounded-xl border border-slate-200">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                          Perkiraan Birahi Berikutnya
+                        </span>
+                        <span className="font-bold text-rose-700 mt-1 block">
+                          {formatTanggalIndo(pred.tanggalPerkiraanBirahiBerikutnya)}
+                        </span>
+                        <span className="text-[11px] text-slate-500">
+                          {pred.sisaHariMenujuBirahi === 0 
+                            ? 'Hari ini!' 
+                            : typeof pred.sisaHariMenujuBirahi === 'number' && pred.sisaHariMenujuBirahi > 0
+                            ? `${pred.sisaHariMenujuBirahi} hari lagi`
+                            : 'Perlu evaluasi'}
+                        </span>
+                      </div>
+                      <div className="p-3 bg-white rounded-xl border border-slate-200">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                          Golden Window Kawin / IB
+                        </span>
+                        <span className="font-bold text-emerald-800 mt-1 block">
+                          {pred.waktuKawinTerbaik}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Gejala Kunci & Rekomendasi Peternak */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                      <div className="p-3.5 bg-rose-50/50 rounded-xl border border-rose-200">
+                        <span className="font-bold text-rose-900 block mb-1.5 flex items-center gap-1.5">
+                          🔍 Gejala Kunci yang Diamati:
+                        </span>
+                        <ul className="space-y-1 text-slate-700">
+                          {pred.gejalaKunci.map((g, i) => (
+                            <li key={i} className="flex items-start gap-1.5">
+                              <span className="text-rose-600 font-bold">•</span>
+                              <span>{g}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      <div className="p-3.5 bg-emerald-50/50 rounded-xl border border-emerald-200">
+                        <span className="font-bold text-emerald-900 block mb-1.5 flex items-center gap-1.5">
+                          📋 Rekomendasi Tindakan:
+                        </span>
+                        <p className="text-slate-700 leading-relaxed">
+                          {pred.rekomendasiTindakan}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Riwayat Observasi Birahi */}
+                    {goat.riwayatBirahi && goat.riwayatBirahi.length > 0 && (
+                      <div className="space-y-2 pt-2">
+                        <h5 className="font-bold text-slate-800 text-xs uppercase tracking-wider">
+                          Riwayat Catatan Birahi ({goat.riwayatBirahi.length})
+                        </h5>
+                        <div className="space-y-2 max-h-48 overflow-y-auto">
+                          {goat.riwayatBirahi.map((b) => (
+                            <div key={b.id} className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs flex items-center justify-between">
+                              <div>
+                                <div className="font-bold text-slate-800 flex items-center gap-2">
+                                  <span>{formatTanggalIndo(b.tanggalPengamatan)}</span>
+                                  {b.statusKawin && (
+                                    <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded font-bold">
+                                      {b.statusKawin}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-[11px] text-slate-500 mt-0.5">
+                                  Gejala: {b.gejalaTeramati?.join(', ') || 'Diamati birahi'}
+                                </div>
+                              </div>
+                              <div className="text-right text-[11px] text-slate-400 font-mono">
+                                {b.dicatatOleh || 'Peternak'}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           )}
 

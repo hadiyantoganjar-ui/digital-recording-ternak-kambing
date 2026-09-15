@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#065f46" />
+      <stop offset="100%" stop-color="#047857" />
+    </linearGradient>
+    <linearGradient id="tagGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fef3c7" />
+      <stop offset="100%" stop-color="#f59e0b" />
+    </linearGradient>
+  </defs>
+
+  <!-- Background with rounded corners -->
+  <rect width="512" height="512" rx="100" fill="url(#bgGrad)" />
+
+  <!-- Outer RFID waves -->
+  <path d="M120 180 A 180 180 0 0 1 392 180" fill="none" stroke="#6ee7b7" stroke-width="18" stroke-linecap="round" opacity="0.6" />
+  <path d="M160 210 A 130 130 0 0 1 352 210" fill="none" stroke="#a7f3d0" stroke-width="16" stroke-linecap="round" opacity="0.8" />
+  <path d="M200 240 A 80 80 0 0 1 312 240" fill="none" stroke="#ffffff" stroke-width="14" stroke-linecap="round" />
+
+  <!-- Eartag RFID shape -->
+  <path d="M220 270 L292 270 L330 380 L182 380 Z" fill="url(#tagGrad)" stroke="#d97706" stroke-width="8" rx="8" />
+  
+  <!-- Eartag pin hole -->
+  <circle cx="256" cy="295" r="14" fill="#065f46" stroke="#ffffff" stroke-width="4" />
+
+  <!-- Tag Label Text -->
+  <text x="256" y="355" text-anchor="middle" font-family="Arial, sans-serif" font-weight="900" font-size="28" fill="#1f2937">RFID 826</text>
+  
+  <!-- Livestock symbol / badge -->
+  <circle cx="256" cy="425" r="32" fill="#ffffff" stroke="#10b981" stroke-width="6" />
+  <!-- Small goat horns / head outline -->
+  <path d="M242 428 C242 420 248 416 256 416 C264 416 270 420 270 428 C270 436 264 440 256 440 C248 440 242 436 242 428 Z" fill="#047857" />
+  <path d="M240 416 C234 408 232 402 238 398 C242 402 246 408 248 414" fill="none" stroke="#f59e0b" stroke-width="4" stroke-linecap="round" />
+  <path d="M272 416 C278 408 280 402 274 398 C270 402 266 408 264 414" fill="none" stroke="#f59e0b" stroke-width="4" stroke-linecap="round" />
+</svg>

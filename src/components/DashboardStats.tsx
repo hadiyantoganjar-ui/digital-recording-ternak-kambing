@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { GoatRecord } from '../types';
 import { 
   Users, 
@@ -7,17 +7,25 @@ import {
   HeartPulse, 
   MapPin, 
   CheckCircle2, 
-  AlertCircle
+  AlertCircle,
+  Flame,
+  Heart,
+  Volume2,
+  ArrowRight
 } from 'lucide-react';
+import { hitungPrediksiSiklusBirahi } from '../utils/livestockScience';
+import { playEstrusAlarmSound } from '../utils/storage';
 
 interface DashboardStatsProps {
   goats: GoatRecord[];
   onSelectQuickFilter?: (filterType: string, value: string) => void;
+  onOpenEstrusAlarmCenter?: () => void;
 }
 
 export const DashboardStats: React.FC<DashboardStatsProps> = ({
   goats,
   onSelectQuickFilter,
+  onOpenEstrusAlarmCenter,
 }) => {
   const total = goats.length;
   const jantan = goats.filter((g) => g.jenisKelamin === 'Jantan').length;
@@ -32,8 +40,101 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({
   const peternakSet = new Set(goats.map((g) => g.namaPeternak.trim()).filter(Boolean));
   const lokasiSet = new Set(goats.map((g) => g.lokasi.trim()).filter(Boolean));
 
+  // Evaluasi Birahi Real-Time untuk Statistik Reproduksi
+  const estrusStats = useMemo(() => {
+    let birahiAktif = 0;
+    let siagaProestrus = 0;
+    let bunting = 0;
+    let betinaDenganData = 0;
+    const activeGoatTags: string[] = [];
+
+    goats.forEach((g) => {
+      if (g.jenisKelamin === 'Betina') {
+        if (g.statusReproduksi === 'Bunting') {
+          bunting++;
+        }
+        const pred = hitungPrediksiSiklusBirahi(g);
+        if (pred.isEligible) {
+          betinaDenganData++;
+          if (pred.statusFase === 'BIRAHI_AKTIF') {
+            birahiAktif++;
+            activeGoatTags.push(g.nomorEartag);
+          } else if (pred.statusFase === 'SIAGA_PROESTRUS') {
+            siagaProestrus++;
+          }
+        }
+      }
+    });
+
+    return {
+      birahiAktif,
+      siagaProestrus,
+      bunting,
+      betinaDenganData,
+      activeGoatTags,
+      totalAlarm: birahiAktif + siagaProestrus,
+    };
+  }, [goats]);
+
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 mb-6">
+    <div className="space-y-3 sm:space-y-4 mb-6">
+      {/* Real-time Estrus Alarm Banner (Hanya Muncul jika Ada Alarm Aktif / Siaga) */}
+      {estrusStats.totalAlarm > 0 && (
+        <div className="bg-gradient-to-r from-rose-700 via-rose-600 to-pink-700 text-white rounded-2xl p-3.5 sm:p-4 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3 border border-rose-400/40">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center flex-shrink-0 animate-bounce">
+              <Flame className="w-5 h-5 text-white fill-white" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="bg-white text-rose-800 text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
+                  Alarm Real-Time Aktif
+                </span>
+                <span className="text-xs font-semibold text-rose-100">
+                  Siklus Birahi 21 Hari
+                </span>
+              </div>
+              <p className="text-xs sm:text-sm font-bold mt-0.5 text-white">
+                {estrusStats.birahiAktif > 0 ? (
+                  <>
+                    🚨 <strong>{estrusStats.birahiAktif} Ekor Betina</strong> dalam puncak estrus (Standing Heat) hari ini: #{estrusStats.activeGoatTags.join(', #')}!
+                  </>
+                ) : (
+                  <>
+                    ⚠️ <strong>{estrusStats.siagaProestrus} Ekor Betina</strong> memasuki fase siaga proestrus (H-1 s.d H-3)!
+                  </>
+                )}
+                {estrusStats.siagaProestrus > 0 && estrusStats.birahiAktif > 0 && (
+                  <span className="text-rose-100 font-normal"> (ditambah {estrusStats.siagaProestrus} ekor siaga H-1..3)</span>
+                )}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              onClick={() => playEstrusAlarmSound()}
+              className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-rose-100 hover:text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors"
+              title="Putar Bunyi Alarm"
+            >
+              <Volume2 className="w-3.5 h-3.5" />
+              <span>Bunyikan</span>
+            </button>
+            {onOpenEstrusAlarmCenter && (
+              <button
+                onClick={onOpenEstrusAlarmCenter}
+                className="px-4 py-1.5 bg-white text-rose-800 hover:bg-rose-50 rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5"
+              >
+                <span>Lihat Ternak</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Grid 5 Metrik Utama */}
+      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
       
       {/* 1. Total Populasi */}
       <div 
@@ -181,5 +282,6 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({
       </div>
 
     </div>
+  </div>
   );
 };

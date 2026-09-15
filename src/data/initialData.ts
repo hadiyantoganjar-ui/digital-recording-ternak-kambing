@@ -1,4 +1,14 @@
-import { GoatRecord, UmurKategori, JenisKelamin, StatusKesehatanUtama, RiwayatBobot, CatatanPakanHarian } from '../types';
+import { 
+  GoatRecord, 
+  UmurKategori, 
+  JenisKelamin, 
+  StatusKesehatanUtama, 
+  RiwayatBobot, 
+  CatatanPakanHarian,
+  StatusReproduksi,
+  CatatanBirahi,
+  CatatanKebuntingan
+} from '../types';
 
 // Raw CSV data parsed from field recording
 const rawCsvData = `
@@ -509,6 +519,100 @@ export function parseInitialData(): GoatRecord[] {
 
     const latestWeight = riwayatBobotList[riwayatBobotList.length - 1].bobot;
 
+    // Inisialisasi Rekam Siklus Reproduksi & Birahi Real-Time (Sampel Ilmiah Akurat)
+    // Sesuai aturan: hanya kambing betina dengan rekaman valid yang memiliki status aktif
+    let statusReproduksi: StatusReproduksi | undefined = undefined;
+    let tanggalBirahiTerakhir: string | undefined = undefined;
+    let riwayatBirahi: CatatanBirahi[] | undefined = undefined;
+    let riwayatKebuntingan: CatatanKebuntingan[] | undefined = undefined;
+
+    const todayDate = new Date();
+    const getDateOffset = (offsetDays: number) => {
+      const d = new Date(todayDate);
+      d.setDate(d.getDate() - offsetDays);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    };
+
+    if (nomorEartag === '0005') {
+      // Sampel 1: Betina PE #0005 - Puncak Birahi Aktif Hari Ini (Interval 21 hari pas) -> Memicu ALARM REAL-TIME 🚨
+      statusReproduksi = 'Siap Kawin / Siklus Aktif';
+      tanggalBirahiTerakhir = getDateOffset(21);
+      riwayatBirahi = [
+        {
+          id: 'birahi-0005-prev',
+          tanggalBirahi: getDateOffset(42),
+          gejalaKlinis: ['Vulva Bengkak & Kemerahan', 'Lendir Transparan', 'Gelisah & Mengibaskan Ekor'],
+          intensitasBirahi: 'Sedang',
+          tindakan: 'Hanya Dicatat (Tidak Dikawinkan)',
+          petugasPengamat: 'Purwanto',
+          catatan: 'Birahi siklus sebelumnya teramati normal.',
+        },
+        {
+          id: 'birahi-0005-last',
+          tanggalBirahi: getDateOffset(21),
+          gejalaKlinis: [
+            'Vulva Bengkak & Kemerahan',
+            'Lendir Transparan',
+            'Standing Heat (Diam Dinaiki)',
+            'Gelisah & Mengibaskan Ekor',
+            'Sering Mengembik'
+          ],
+          intensitasBirahi: 'Sangat Jelas / Kuat',
+          tindakan: 'Hanya Dicatat (Tidak Dikawinkan)',
+          petugasPengamat: 'Purwanto',
+          catatan: 'Standing heat teramati jelas. Siklus berikutnya tepat jatuh hari ini (Hari ke-21)!',
+        },
+      ];
+    } else if (nomorEartag === '0015') {
+      // Sampel 2: Betina Boer #0015 - Siaga Birahi (H-2 hari menuju puncak birahi / hari ke-19 proestrus) -> Memicu SIAGA ⚠️
+      statusReproduksi = 'Siap Kawin / Siklus Aktif';
+      tanggalBirahiTerakhir = getDateOffset(19);
+      riwayatBirahi = [
+        {
+          id: 'birahi-0015-last',
+          tanggalBirahi: getDateOffset(19),
+          gejalaKlinis: ['Vulva Bengkak & Kemerahan', 'Gelisah & Mengibaskan Ekor'],
+          intensitasBirahi: 'Sedang',
+          tindakan: 'Hanya Dicatat (Tidak Dikawinkan)',
+          petugasPengamat: 'Purwanto',
+          catatan: 'Fase proestrus aktif. Siapkan pejantan pemacak untuk 2 hari lagi.',
+        },
+      ];
+    } else if (nomorEartag === '0033') {
+      // Sampel 3: Betina PE #0033 - Bunting (Anoestrus gestasi aktif: siklus terhenti alami)
+      statusReproduksi = 'Bunting';
+      riwayatKebuntingan = [
+        {
+          id: 'kew-0033',
+          tanggalKawin: getDateOffset(65),
+          nomorPejantan: '0100',
+          metodeKawin: 'Alami',
+          statusKonfirmasi: 'Positif Bunting',
+          estimasiHPL: getDateOffset(-85), // ~150 hari masa kebuntingan
+          catatan: 'Palpasi abdominal sisi kanan bawah teraba pembesaran uterus. Tidak ada birahi berulang.',
+        },
+      ];
+    } else if (nomorEartag === '0074') {
+      // Sampel 4: Betina PE #0074 - Diestrus (Hari ke-8 siklus, 13 hari menuju siklus berikutnya)
+      statusReproduksi = 'Siap Kawin / Siklus Aktif';
+      tanggalBirahiTerakhir = getDateOffset(8);
+      riwayatBirahi = [
+        {
+          id: 'birahi-0074-last',
+          tanggalBirahi: getDateOffset(8),
+          gejalaKlinis: ['Vulva Bengkak & Kemerahan', 'Lendir Transparan'],
+          intensitasBirahi: 'Sedang',
+          tindakan: 'Dikawinkan Pejantan',
+          pejantanId: '0100',
+          petugasPengamat: 'Purnomo',
+          catatan: 'Kawin alami dengan pejantan PE #0100.',
+        },
+      ];
+    }
+
     records.push({
       id: nomorRfid || `goat-${idx}`,
       nomorRfid: nomorRfid,
@@ -520,6 +624,10 @@ export function parseInitialData(): GoatRecord[] {
       umur: umur,
       jenisKelamin: jenisKelamin,
       statusKesehatan: statusKesehatan,
+      statusReproduksi: statusReproduksi,
+      tanggalBirahiTerakhir: tanggalBirahiTerakhir,
+      riwayatBirahi: riwayatBirahi,
+      riwayatKebuntingan: riwayatKebuntingan,
       riwayatKesehatan: riwayatKesehatan,
       riwayatBobot: riwayatBobotList,
       riwayatPakanHarian: riwayatPakanList,

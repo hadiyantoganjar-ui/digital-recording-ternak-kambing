@@ -6,7 +6,10 @@ import {
   CatatanPakanHarian,
   AnalisisEfisiensiPakanInterval,
   RiwayatBobot,
-  DataPakan
+  DataPakan,
+  GoatRecord,
+  HasilPrediksiBirahi,
+  StatusFaseBirahi
 } from '../types';
 
 /**
@@ -118,9 +121,15 @@ export function hitungPrediksiHargaKambing(
   bobotKg: number,
   jenisKelamin: JenisKelamin,
   bangsa: string,
-  umur: UmurKategori
+  umur: UmurKategori,
+  options?: {
+    customHargaDasarPerKg?: number;
+    namaArea?: string;
+    faktorArea?: number;
+    selisihVsProvinsi?: number;
+  }
 ): PrediksiHargaTernak {
-  const hargaDasarPerKg = jenisKelamin === 'Jantan' ? 82500 : 70000;
+  const hargaDasarPerKg = options?.customHargaDasarPerKg ?? (jenisKelamin === 'Jantan' ? 82500 : 70000);
 
   // 1. Faktor Kelamin: Jantan memiliki permintaan tinggi untuk Qurban & Aqiqah
   let faktorKelamin = jenisKelamin === 'Jantan' ? 1.15 : 0.95;
@@ -187,6 +196,9 @@ export function hitungPrediksiHargaKambing(
     faktorKelamin,
     faktorBangsa,
     faktorKelayakan,
+    faktorArea: options?.faktorArea,
+    namaAreaPasar: options?.namaArea,
+    selisihVsProvinsi: options?.selisihVsProvinsi,
     estimasiHargaTotal,
     rangeHargaMin,
     rangeHargaMax,
@@ -411,4 +423,298 @@ export function hitungEfisiensiPakanAntarTimbang(
   }
 
   return results;
+}
+
+/**
+ * Normalisasi tanggal ke tengah malam (00:00:00) lokal untuk kalkulasi selisih hari presisi
+ */
+function parseDateToMidnight(dateInput: string | Date): Date {
+  if (typeof dateInput === 'string') {
+    const parts = dateInput.slice(0, 10).split('-');
+    if (parts.length === 3) {
+      return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+    }
+    const d = new Date(dateInput);
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  }
+  return new Date(dateInput.getFullYear(), dateInput.getMonth(), dateInput.getDate());
+}
+
+function formatDateToIso(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+export function formatTanggalIndo(dateStr: string | undefined): string {
+  if (!dateStr) return '-';
+  try {
+    const d = parseDateToMidnight(dateStr);
+    return d.toLocaleDateString('id-ID', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric'
+    });
+  } catch {
+    return dateStr;
+  }
+}
+
+/**
+ * Prediksi Siklus Birahi Kambing Betina Secara Real-Time dan Akurat
+ * 
+ * Dasar Ilmiah Fisiologi Reproduksi Kambing (Capra hircus):
+ * - Rata-rata interval siklus estrus: 21 hari (kisaran fisiologis normal: 18 - 24 hari)
+ * - Durasi fase birahi (standing heat): 24 - 48 jam (rata-rata 36 jam)
+ * - Waktu ovulasi: 24 - 36 jam setelah awal estrus (menjelang akhir birahi)
+ * - Golden Mating Window: 12 - 24 jam setelah tanda estrus teramati pertama kali
+ * - Fase Proestrus: Hari ke-18 s.d 20 (persiapan folikuler, pelepasan estrogen)
+ * - Fase Estrus: Hari ke-21 / Hari 0 (puncak birahi, siap kawin)
+ * - Fase Metestrus: Hari ke-1 s.d 3 (korpus luteum mulai tumbuh pasca ovulasi)
+ * - Fase Diestrus: Hari ke-4 s.d 17 (fase luteal tenang, progesteron tinggi)
+ * 
+ * Aturan Ketat Validitas (Mandat: Jangan tambahkan bila data tidak ada/tidak sesuai):
+ * 1. Kambing Jantan -> Ineligible (tidak ada siklus birahi)
+ * 2. Kambing Bunting -> Ineligible (anoestrus gestasi: siklus terhenti selama kebuntingan ~150 hari)
+ * 3. Cempe I0 di bawah pubertas (< 6-8 bulan / < 20 kg tanpa riwayat) -> Ineligible
+ * 4. Tanpa Catatan Birahi -> Ineligible ("Belum ada rekaman tanggal birahi")
+ */
+export function hitungPrediksiSiklusBirahi(
+  goat: GoatRecord,
+  referenceDateInput?: Date | string
+): HasilPrediksiBirahi {
+  // 1. Validasi Jenis Kelamin: Jantan tidak mengalami siklus birahi
+  if (goat.jenisKelamin !== 'Betina') {
+    return {
+      isEligible: false,
+      alasanIneligible: 'Ternak Jantan — Kambing jantan tidak mengalami siklus estrus/birahi.',
+      statusFase: 'TIDAK_APLIKATIF',
+      isAlarmActive: false,
+      tingkatUrgensi: 'NONE',
+      pesanAlarm: '',
+      badgeLabel: 'Ternak Jantan',
+      badgeColor: 'bg-slate-100 text-slate-500 border border-slate-200',
+      rekomendasiTindakan: 'Ternak jantan digunakan sebagai pejantan pemacak unggul atau bakalan penggemukan.',
+      waktuKawinTerbaik: '-',
+      gejalaKunci: [],
+      persentaseSiklusBerjalan: 0,
+    };
+  }
+
+  // 2. Validasi Status Kebuntingan: Bunting mengalami anoestrus gestasi fisiologis
+  if (goat.statusReproduksi === 'Bunting') {
+    const lastMating = goat.riwayatKebuntingan && goat.riwayatKebuntingan.length > 0
+      ? goat.riwayatKebuntingan[goat.riwayatKebuntingan.length - 1]
+      : null;
+    const infoHpl = lastMating?.estimasiHPL ? ` • Perkiraan Lahir: ${formatTanggalIndo(lastMating.estimasiHPL)}` : '';
+
+    return {
+      isEligible: false,
+      alasanIneligible: `Sedang Bunting (Anoestrus gestasi aktif — masa kebuntingan ~150 hari${infoHpl}).`,
+      statusFase: 'TIDAK_APLIKATIF',
+      isAlarmActive: false,
+      tingkatUrgensi: 'NONE',
+      pesanAlarm: '',
+      badgeLabel: 'Bunting (Gestasi)',
+      badgeColor: 'bg-purple-100 text-purple-900 border border-purple-300 font-bold',
+      rekomendasiTindakan: 'Ternak dalam masa kebuntingan aktif. Hormon progesteron menekan siklus birahi secara alami. Berikan pakan bergizi tinggi dan hindari stres.',
+      waktuKawinTerbaik: '-',
+      gejalaKunci: ['Perut sisi kanan bawah membesar', 'Nafsu makan stabil', 'Vulva tenang tidak berlendir'],
+      persentaseSiklusBerjalan: 0,
+    };
+  }
+
+  // 3. Validasi Cempe Belum Puber
+  const isCempeMuda = goat.umur === 'I0' && (goat.bobotBadan < 19 || goat.statusReproduksi === 'Belum Cukup Umur');
+  const hasRecordedEstrus = Boolean(
+    goat.tanggalBirahiTerakhir || 
+    (goat.riwayatBirahi && goat.riwayatBirahi.length > 0)
+  );
+
+  if (isCempeMuda && !hasRecordedEstrus) {
+    return {
+      isEligible: false,
+      alasanIneligible: 'Belum Cukup Umur (Cempe belum mencapai masa pubertas seksual fisiologis ~6-8 bulan).',
+      statusFase: 'TIDAK_APLIKATIF',
+      isAlarmActive: false,
+      tingkatUrgensi: 'NONE',
+      pesanAlarm: '',
+      badgeLabel: 'Cempe (Pra-Pubertas)',
+      badgeColor: 'bg-slate-100 text-slate-500 border border-slate-200',
+      rekomendasiTindakan: 'Fokuskan nutrisi pakan pertumbuhan berkualitas (protein kasar 14-16%) hingga bobot mencapai minimal 22-25 kg sebelum program perkawinan perdana.',
+      waktuKawinTerbaik: '-',
+      gejalaKunci: [],
+      persentaseSiklusBerjalan: 0,
+    };
+  }
+
+  // 4. Validasi Ketersediaan Data Rekaman (Mandat: Jangan tambahkan bila data benar-benar tidak ada)
+  if (!hasRecordedEstrus) {
+    return {
+      isEligible: false,
+      alasanIneligible: 'Belum ada data rekaman birahi. Rekam tanggal birahi pertama kali untuk mengaktifkan sistem prediksi dan alarm akurat.',
+      statusFase: 'TIDAK_APLIKATIF',
+      isAlarmActive: false,
+      tingkatUrgensi: 'NONE',
+      pesanAlarm: '',
+      badgeLabel: 'Belum Ada Rekaman',
+      badgeColor: 'bg-slate-50 text-slate-400 border border-dashed border-slate-300',
+      rekomendasiTindakan: 'Amati tanda klinis birahi harian di kandang: vulva kemerahan, keluar lendir transparan, ekor mengibas (*tail flagging*), dan *standing heat*. Rekam tanggal pengamatan awal untuk memulai pelacakan siklus 21 hari.',
+      waktuKawinTerbaik: 'Perlu rekaman awal',
+      gejalaKunci: [
+        'Vulva bengkak, merah, dan basah',
+        'Keluar lendir transparan dari liang vagina',
+        'Gelisah dan sering mengibaskan ekor',
+        'Standing heat (diam saat dinaiki pejantan / betina lain)',
+      ],
+      persentaseSiklusBerjalan: 0,
+    };
+  }
+
+  // 5. Data Valid: Menghitung Prediksi Siklus Birahi Akurat Berbasis Waktu Nyata (Real-time)
+  let latestDateStr = goat.tanggalBirahiTerakhir || '';
+  if (goat.riwayatBirahi && goat.riwayatBirahi.length > 0) {
+    const sorted = [...goat.riwayatBirahi].sort(
+      (a, b) => new Date(b.tanggalBirahi).getTime() - new Date(a.tanggalBirahi).getTime()
+    );
+    latestDateStr = sorted[0].tanggalBirahi;
+  }
+
+  const refMidnight = referenceDateInput ? parseDateToMidnight(referenceDateInput) : parseDateToMidnight(new Date());
+  const lastEstrusMidnight = parseDateToMidnight(latestDateStr);
+
+  const diffMs = refMidnight.getTime() - lastEstrusMidnight.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  const SIKLUS_ESTRUS_HARI = 21; // Standar biologis kambing di Indonesia
+  let hariKeDalamSiklus: number;
+  let sisaHariMenujuBirahi: number;
+  let nextEstrusDate: Date;
+
+  if (diffDays < 0) {
+    // Tanggal birahi di masa depan yang telah dijadwalkan / diinput
+    hariKeDalamSiklus = 1;
+    sisaHariMenujuBirahi = Math.abs(diffDays);
+    nextEstrusDate = lastEstrusMidnight;
+  } else {
+    // diffDays >= 0
+    const siklusBerjalan = Math.floor(diffDays / SIKLUS_ESTRUS_HARI);
+    const sisaHariModulo = diffDays % SIKLUS_ESTRUS_HARI;
+    hariKeDalamSiklus = sisaHariModulo + 1; // 1 s/d 21
+
+    if (sisaHariModulo === 0 && diffDays > 0) {
+      // Tepat pada hari ke-21 siklus (atau kelipatan 21) = HARI H BIRAHI BARU
+      sisaHariMenujuBirahi = 0;
+      nextEstrusDate = refMidnight;
+    } else if (diffDays === 0) {
+      // Hari H tanggal rekaman awal
+      sisaHariMenujuBirahi = 0;
+      nextEstrusDate = refMidnight;
+    } else {
+      sisaHariMenujuBirahi = SIKLUS_ESTRUS_HARI - sisaHariModulo;
+      nextEstrusDate = new Date(lastEstrusMidnight.getTime() + (siklusBerjalan + 1) * SIKLUS_ESTRUS_HARI * 24 * 60 * 60 * 1000);
+    }
+  }
+
+  const minWindowDate = new Date(nextEstrusDate.getTime() - 2 * 24 * 60 * 60 * 1000); // H-2 (19 hari)
+  const maxWindowDate = new Date(nextEstrusDate.getTime() + 2 * 24 * 60 * 60 * 1000); // H+2 (23 hari)
+
+  const persentaseSiklus = Math.min(100, Math.round((hariKeDalamSiklus / SIKLUS_ESTRUS_HARI) * 100));
+
+  // Gejala kunci berdasarkan ilmu peternakan
+  const gejalaKunciDefault = [
+    'Vulva bengkak, memerah, dan mengeluarkan lendir transparan elastis',
+    'Standing heat: diam dan siap dinaiki pejantan pemacak',
+    'Ekor bergerak aktif mengibas-ngibas (tail flagging)',
+    'Sering mengembik mencari pejantan dan nafsu makan sedikit berkurang',
+  ];
+
+  // Penentuan Fase, Urgensi Alarm & Rekomendasi
+  let statusFase: StatusFaseBirahi = 'DIESTRUS';
+  let isAlarmActive = false;
+  let tingkatUrgensi: HasilPrediksiBirahi['tingkatUrgensi'] = 'NORMAL';
+  let pesanAlarm = '';
+  let badgeLabel = '';
+  let badgeColor = '';
+  let rekomendasiTindakan = '';
+  let waktuKawinTerbaik = '';
+
+  // Kondisi 1: Puncak Birahi Aktif (Hari H s/d H+1 / Standing Heat)
+  if (sisaHariMenujuBirahi === 0 || hariKeDalamSiklus === 21 || (hariKeDalamSiklus === 1 && diffDays > 0)) {
+    statusFase = 'BIRAHI_AKTIF';
+    isAlarmActive = true;
+    tingkatUrgensi = 'TINGGI';
+    badgeLabel = '🚨 BIRAHI AKTIF (HARI INI)';
+    badgeColor = 'bg-rose-600 text-white font-extrabold shadow-sm ring-2 ring-rose-300 animate-pulse';
+    pesanAlarm = '🚨 ALARM BIRAHI AKTIF: Kambing sedang dalam puncak estrus (Standing Heat) hari ini! Segera lakukan perkawinan pejantan unggul atau Inseminasi Buatan (IB).';
+    waktuKawinTerbaik = 'GOLDEN MATING WINDOW: Kawinkan dalam rentang 12 - 24 jam sejak tanda standing heat pertama terlihat (ovulasi terjadi menjelang akhir fase estrus).';
+    rekomendasiTindakan = 'Segera bawa kambing ke kandang pejantan pemacak atau hubungi Inseminator Buatan (IB). Pastikan vulva bersih dan catat identitas pejantan pemacak untuk rekam jejak silsilah.';
+  }
+  // Kondisi 2: Siaga Birahi Proestrus (H-1 s/d H-3)
+  else if (sisaHariMenujuBirahi >= 1 && sisaHariMenujuBirahi <= 3) {
+    statusFase = 'SIAGA_PROESTRUS';
+    isAlarmActive = true;
+    tingkatUrgensi = 'SEDANG';
+    badgeLabel = `⚠️ Siaga Birahi (H-${sisaHariMenujuBirahi})`;
+    badgeColor = 'bg-amber-400 text-amber-950 font-extrabold border border-amber-500 shadow-2xs';
+    pesanAlarm = `⚠️ PERINGATAN SIAGA: Birahi diprediksi tiba dalam ${sisaHariMenujuBirahi} hari ke depan (${formatTanggalIndo(formatDateToIso(nextEstrusDate))}).`;
+    waktuKawinTerbaik = `Perkiraan puncak kawin: ${formatTanggalIndo(formatDateToIso(nextEstrusDate))} (Hari ke-21 siklus).`;
+    rekomendasiTindakan = 'Fase Proestrus aktif: folikel ovarium sedang berkembang pesat. Dekatkan dengan pejantan pemacak (efek buck) untuk menstimulasi birahi optimal dan amati kondisi vulva setiap pagi dan sore.';
+  }
+  // Kondisi 3: Metestrus (Hari ke-2 s/d ke-4 siklus / pasca ovulasi)
+  else if (hariKeDalamSiklus >= 2 && hariKeDalamSiklus <= 4) {
+    statusFase = 'METESTRUS';
+    isAlarmActive = false;
+    tingkatUrgensi = 'NORMAL';
+    badgeLabel = `Metestrus (H+${hariKeDalamSiklus - 1})`;
+    badgeColor = 'bg-sky-100 text-sky-800 border border-sky-300 font-semibold';
+    pesanAlarm = `Fase Metestrus (H+${hariKeDalamSiklus - 1} pasca birahi). Ovulasi telah terjadi, korpus luteum mulai terbentuk.`;
+    waktuKawinTerbaik = 'Masa subur telah berakhir. Jika sudah dikawinkan, pantau apakah terjadi kebuntingan pada 21 hari ke depan.';
+    rekomendasiTindakan = 'Kambing sudah tidak mau dinaiki pejantan. Berikan pakan berkualitas dan catat tanggal perkawinan jika sudah dikawinkan.';
+  }
+  // Kondisi 4: Diestrus (Hari ke-5 s/d 17 / fase luteal tenang)
+  else {
+    statusFase = 'DIESTRUS';
+    isAlarmActive = false;
+    tingkatUrgensi = 'NORMAL';
+    badgeLabel = `Diestrus (${sisaHariMenujuBirahi} hr lagi)`;
+    badgeColor = 'bg-emerald-50 text-emerald-800 border border-emerald-200 font-medium';
+    pesanAlarm = `Fase Diestrus (fase luteal tenang). Hormon progesteron dominan. Birahi berikutnya diperkirakan ${sisaHariMenujuBirahi} hari lagi (${formatTanggalIndo(formatDateToIso(nextEstrusDate))}).`;
+    waktuKawinTerbaik = `Jadwal kawin berikutnya: ${formatTanggalIndo(formatDateToIso(nextEstrusDate))}.`;
+    rekomendasiTindakan = 'Pertahankan kecukupan nutrisi pakan hijauan dan konsentrat. Hindari pengobatan keras atau pemindahan kandang yang memicu stres.';
+  }
+
+  // Flag evaluasi bila siklus telah terlewat > 25 hari tanpa rekaman kawin atau birahi baru
+  if (diffDays > 25 && (!goat.riwayatKebuntingan || goat.riwayatKebuntingan.length === 0)) {
+    const siklusKelewatan = Math.floor(diffDays / SIKLUS_ESTRUS_HARI);
+    if (siklusKelewatan >= 2 && statusFase !== 'BIRAHI_AKTIF' && statusFase !== 'SIAGA_PROESTRUS') {
+      statusFase = 'TERLEWAT_EVALUASI';
+      tingkatUrgensi = 'EVALUASI';
+      badgeLabel = 'Perlu Evaluasi (Cek Silent Heat / Bunting)';
+      badgeColor = 'bg-amber-100 text-amber-900 border border-amber-300 font-bold';
+      pesanAlarm = `Ternak telah melewati ${siklusKelewatan} siklus (terakhir dicatat ${formatTanggalIndo(latestDateStr)}). Periksa kemungkinan kebuntingan atau birahi tenang (silent heat).`;
+      rekomendasiTindakan = 'Lakukan pemeriksaan kebuntingan (palpasi abdominal / USG jika tersedia) atau amati intensif adanya silent heat (birahi tanpa tanda visual mencolok).';
+    }
+  }
+
+  return {
+    isEligible: true,
+    tanggalBirahiTerakhir: latestDateStr,
+    tanggalPerkiraanBirahiBerikutnya: formatDateToIso(nextEstrusDate),
+    rentangPerkiraanMin: formatDateToIso(minWindowDate),
+    rentangPerkiraanMax: formatDateToIso(maxWindowDate),
+    hariKeDalamSiklus,
+    sisaHariMenujuBirahi,
+    statusFase,
+    isAlarmActive,
+    tingkatUrgensi,
+    pesanAlarm,
+    badgeLabel,
+    badgeColor,
+    rekomendasiTindakan,
+    waktuKawinTerbaik,
+    gejalaKunci: gejalaKunciDefault,
+    persentaseSiklusBerjalan: persentaseSiklus,
+  };
 }

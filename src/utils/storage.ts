@@ -1,20 +1,48 @@
 import { GoatRecord, UmurKategori, JenisKelamin, StatusKesehatanUtama } from '../types';
 import { parseInitialData } from '../data/initialData';
 
-const STORAGE_KEY = 'ternak_kambing_rfid_v2';
-const LEGACY_STORAGE_KEY = 'ternak_kambing_rfid_v1';
+const STORAGE_KEY = 'ternak_kambing_rfid_v3';
+const LEGACY_STORAGE_KEYS = ['ternak_kambing_rfid_v2', 'ternak_kambing_rfid_v1'];
 
 export function loadGoats(): GoatRecord[] {
   try {
-    const saved = localStorage.getItem(STORAGE_KEY) || localStorage.getItem(LEGACY_STORAGE_KEY);
+    let saved = localStorage.getItem(STORAGE_KEY);
+    if (!saved) {
+      for (const legacyKey of LEGACY_STORAGE_KEYS) {
+        const found = localStorage.getItem(legacyKey);
+        if (found) {
+          saved = found;
+          break;
+        }
+      }
+    }
+
     if (saved) {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) {
         // Hapus permanen data yang berasal dari lokasi Datarajan jika ada di cache
-        const filtered = parsed.filter(
+        let filtered = parsed.filter(
           (g) => (g.lokasi || '').trim().toLowerCase() !== 'datarajan'
         );
-        // Simpan versi bersih
+
+        // Pastikan kambing memiliki field reproduksi terbaru jika belum ada
+        const initialSample = parseInitialData();
+        const initialMap = new Map(initialSample.map((g) => [g.nomorEartag, g]));
+
+        filtered = filtered.map((g) => {
+          const sample = initialMap.get(g.nomorEartag);
+          if (sample && !g.tanggalBirahiTerakhir && sample.tanggalBirahiTerakhir) {
+            return {
+              ...g,
+              statusReproduksi: g.statusReproduksi || sample.statusReproduksi,
+              tanggalBirahiTerakhir: sample.tanggalBirahiTerakhir,
+              riwayatBirahi: sample.riwayatBirahi,
+              riwayatKebuntingan: sample.riwayatKebuntingan,
+            };
+          }
+          return g;
+        });
+
         saveGoats(filtered);
         return filtered;
       }
@@ -62,6 +90,38 @@ export function playBeepSound() {
     osc.stop(ctx.currentTime + 0.12);
   } catch {
     // ignore audio block
+  }
+}
+
+/**
+ * Audio Alarm Notifikasi Siklus Birahi Ternak Kambing
+ * Tiga nada harmoni bersih (A5 -> D6 -> E6) untuk menarik perhatian peternak saat alarm birahi aktif
+ */
+export function playEstrusAlarmSound() {
+  try {
+    const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextClass) return;
+    const ctx = new AudioContextClass();
+    
+    const playTone = (freq: number, startTime: number, duration: number) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, startTime);
+      gain.gain.setValueAtTime(0.18, startTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(startTime);
+      osc.stop(startTime + duration);
+    };
+
+    const now = ctx.currentTime;
+    playTone(880, now, 0.18);
+    playTone(1174, now + 0.14, 0.18);
+    playTone(1318, now + 0.28, 0.35);
+  } catch {
+    // ignore audio restriction
   }
 }
 

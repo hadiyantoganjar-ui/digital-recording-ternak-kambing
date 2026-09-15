@@ -18,13 +18,19 @@ import {
   ChevronsRight,
   TrendingUp,
   Coins,
-  Plus
+  Plus,
+  Heart,
+  Flame,
+  Volume2
 } from 'lucide-react';
 import { 
   hitungAdgAntarTimbang, 
   hitungPrediksiHargaKambing, 
-  formatRupiah 
+  formatRupiah,
+  hitungPrediksiSiklusBirahi,
+  formatTanggalIndo
 } from '../utils/livestockScience';
+import { playEstrusAlarmSound } from '../utils/storage';
 
 interface GoatTableProps {
   goats: GoatRecord[];
@@ -36,6 +42,7 @@ interface GoatTableProps {
   onOpenQuickWeight: (goat: GoatRecord) => void;
   onOpenQuickHealth: (goat: GoatRecord) => void;
   onOpenFeedRecord?: (goat: GoatRecord) => void;
+  onOpenEstrusRecord?: (goat: GoatRecord) => void;
 }
 
 export const GoatTable: React.FC<GoatTableProps> = ({
@@ -48,6 +55,7 @@ export const GoatTable: React.FC<GoatTableProps> = ({
   onOpenQuickWeight,
   onOpenQuickHealth,
   onOpenFeedRecord,
+  onOpenEstrusRecord,
 }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(25);
@@ -112,6 +120,29 @@ export const GoatTable: React.FC<GoatTableProps> = ({
         return false;
       }
 
+      // Status Birahi & Reproduksi filter
+      if (filterOptions.statusBirahi) {
+        if (filterOptions.statusBirahi === 'birahi_aktif') {
+          if (goat.jenisKelamin !== 'Betina') return false;
+          const pred = hitungPrediksiSiklusBirahi(goat);
+          if (!pred.isEligible || pred.statusFase !== 'BIRAHI_AKTIF') return false;
+        } else if (filterOptions.statusBirahi === 'siaga_proestrus') {
+          if (goat.jenisKelamin !== 'Betina') return false;
+          const pred = hitungPrediksiSiklusBirahi(goat);
+          if (!pred.isEligible || pred.statusFase !== 'SIAGA_PROESTRUS') return false;
+        } else if (filterOptions.statusBirahi === 'bunting') {
+          if (goat.jenisKelamin !== 'Betina' || goat.statusReproduksi !== 'Bunting') return false;
+        } else if (filterOptions.statusBirahi === 'ada_data') {
+          if (goat.jenisKelamin !== 'Betina') return false;
+          const pred = hitungPrediksiSiklusBirahi(goat);
+          if (!pred.isEligible) return false;
+        } else if (filterOptions.statusBirahi === 'belum_direkam') {
+          if (goat.jenisKelamin !== 'Betina') return false;
+          const pred = hitungPrediksiSiklusBirahi(goat);
+          if (pred.isEligible || goat.statusReproduksi === 'Bunting') return false;
+        }
+      }
+
       return true;
     });
   }, [goats, filterOptions]);
@@ -138,6 +169,7 @@ export const GoatTable: React.FC<GoatTableProps> = ({
       jenisKelamin: '',
       umur: '',
       statusKesehatan: '',
+      statusBirahi: '',
     });
     setCurrentPage(1);
   };
@@ -149,7 +181,8 @@ export const GoatTable: React.FC<GoatTableProps> = ({
     filterOptions.bangsa || 
     filterOptions.jenisKelamin || 
     filterOptions.umur || 
-    filterOptions.statusKesehatan;
+    filterOptions.statusKesehatan ||
+    filterOptions.statusBirahi;
 
   return (
     <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
@@ -197,8 +230,104 @@ export const GoatTable: React.FC<GoatTableProps> = ({
           </div>
         </div>
 
+        {/* Quick Filter Pills Birahi & Reproduksi */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">
+            Filter Birahi:
+          </span>
+          <button
+            onClick={() => {
+              setFilterOptions((prev) => ({ ...prev, statusBirahi: '' }));
+              setCurrentPage(1);
+            }}
+            className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${
+              !filterOptions.statusBirahi
+                ? 'bg-slate-800 text-white'
+                : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'
+            }`}
+          >
+            Semua
+          </button>
+          <button
+            onClick={() => {
+              setFilterOptions((prev) => ({ ...prev, statusBirahi: 'birahi_aktif' }));
+              setCurrentPage(1);
+            }}
+            className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap flex items-center gap-1 transition-colors ${
+              filterOptions.statusBirahi === 'birahi_aktif'
+                ? 'bg-rose-600 text-white shadow-xs'
+                : 'bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200'
+            }`}
+          >
+            <Flame className="w-3.5 h-3.5 fill-current" />
+            <span>🚨 Birahi Hari Ini</span>
+          </button>
+          <button
+            onClick={() => {
+              setFilterOptions((prev) => ({ ...prev, statusBirahi: 'siaga_proestrus' }));
+              setCurrentPage(1);
+            }}
+            className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap flex items-center gap-1 transition-colors ${
+              filterOptions.statusBirahi === 'siaga_proestrus'
+                ? 'bg-amber-500 text-slate-950 font-bold shadow-xs'
+                : 'bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200'
+            }`}
+          >
+            <Heart className="w-3.5 h-3.5 fill-current" />
+            <span>⚠️ Siaga (H-1..H-3)</span>
+          </button>
+          <button
+            onClick={() => {
+              setFilterOptions((prev) => ({ ...prev, statusBirahi: 'bunting' }));
+              setCurrentPage(1);
+            }}
+            className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${
+              filterOptions.statusBirahi === 'bunting'
+                ? 'bg-purple-600 text-white shadow-xs'
+                : 'bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-200'
+            }`}
+          >
+            🍼 Bunting
+          </button>
+          <button
+            onClick={() => {
+              setFilterOptions((prev) => ({ ...prev, statusBirahi: 'ada_data' }));
+              setCurrentPage(1);
+            }}
+            className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${
+              filterOptions.statusBirahi === 'ada_data'
+                ? 'bg-emerald-700 text-white shadow-xs'
+                : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200'
+            }`}
+          >
+            📋 Terpantau Siklus
+          </button>
+        </div>
+
         {/* Filter Dropdown Selects */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 pt-1">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2 pt-1">
+          {/* Status Birahi Dropdown */}
+          <div>
+            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+              Siklus Birahi
+            </label>
+            <select
+              value={filterOptions.statusBirahi || ''}
+              onChange={(e) => {
+                setFilterOptions((prev) => ({ ...prev, statusBirahi: e.target.value }));
+                setCurrentPage(1);
+              }}
+              className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 focus:border-emerald-600 focus:outline-none"
+            >
+              <option value="">Semua Status Birahi</option>
+              <option value="birahi_aktif">🚨 Birahi Aktif (Standing Heat)</option>
+              <option value="siaga_proestrus">⚠️ Siaga Birahi (H-1 s.d H-3)</option>
+              <option value="bunting">🍼 Bunting (Gestasi)</option>
+              <option value="ada_data">Betina Terpantau Siklus</option>
+              <option value="belum_direkam">Betina Belum Direkam</option>
+            </select>
+          </div>
+
           {/* Bangsa */}
           <div>
             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">Bangsa</label>
@@ -318,6 +447,7 @@ export const GoatTable: React.FC<GoatTableProps> = ({
             <tr className="bg-slate-100/80 text-slate-600 font-bold uppercase tracking-wider text-[11px] border-b border-slate-200">
               <th className="py-3 px-4">Identitas & RFID</th>
               <th className="py-3 px-3">Bangsa & Kelamin</th>
+              <th className="py-3 px-3">Siklus Birahi (Real-Time)</th>
               <th className="py-3 px-3">Umur Gigi</th>
               <th className="py-3 px-3">Penimbangan Berkala & ADG</th>
               <th className="py-3 px-3">Prediksi Harga (Lampung)</th>
@@ -330,7 +460,7 @@ export const GoatTable: React.FC<GoatTableProps> = ({
           <tbody className="divide-y divide-slate-100">
             {paginatedGoats.length === 0 ? (
               <tr>
-                <td colSpan={9} className="py-12 text-center text-slate-400">
+                <td colSpan={10} className="py-12 text-center text-slate-400">
                   <div className="flex flex-col items-center justify-center gap-2">
                     <Radio className="w-8 h-8 text-slate-300" />
                     <p className="text-sm font-semibold text-slate-600">Tidak ada data ternak yang cocok</p>
@@ -415,6 +545,72 @@ export const GoatTable: React.FC<GoatTableProps> = ({
                       }`}>
                         {goat.jenisKelamin}
                       </span>
+                    </td>
+
+                    {/* Siklus Birahi & Reproduksi (Real-time) */}
+                    <td className="py-3 px-3" onClick={(e) => e.stopPropagation()}>
+                      {goat.jenisKelamin === 'Jantan' ? (
+                        <span className="text-[11px] text-slate-400 font-medium">-</span>
+                      ) : goat.statusReproduksi === 'Bunting' ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-purple-100 text-purple-900 border border-purple-200">
+                          🍼 Bunting (Gestasi)
+                        </span>
+                      ) : (() => {
+                        const pred = hitungPrediksiSiklusBirahi(goat);
+                        if (!pred.isEligible) {
+                          if (goat.statusReproduksi === 'Belum Cukup Umur' || goat.umur === 'Cempe') {
+                            return (
+                              <span className="text-[11px] text-slate-400 font-medium">
+                                Cempe (&lt; 7 bln)
+                              </span>
+                            );
+                          }
+                          return (
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[11px] text-slate-400 italic">Belum direkam</span>
+                              {onOpenEstrusRecord && (
+                                <button
+                                  type="button"
+                                  onClick={() => onOpenEstrusRecord(goat)}
+                                  className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition-colors"
+                                  title="Catat Pengamatan Birahi Awal"
+                                >
+                                  + Rekam
+                                </button>
+                              )}
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <div className="space-y-0.5">
+                            <div className="flex items-center gap-1">
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold ${pred.badgeColor} ${pred.isAlarmActive ? 'animate-pulse ring-1 ring-rose-400' : ''}`}>
+                                {pred.statusFase === 'BIRAHI_AKTIF' && <Flame className="w-3 h-3 text-rose-600 fill-rose-600" />}
+                                {pred.statusFase === 'SIAGA_PROESTRUS' && <Heart className="w-3 h-3 text-amber-600 fill-amber-500" />}
+                                {pred.badgeLabel}
+                              </span>
+                              {pred.isAlarmActive && (
+                                <button
+                                  type="button"
+                                  onClick={() => playEstrusAlarmSound()}
+                                  className="p-1 rounded-md text-rose-600 hover:bg-rose-100 transition-colors"
+                                  title="Putar Bunyi Alarm Birahi"
+                                >
+                                  <Volume2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
+                            <div className="text-[10px] text-slate-500">
+                              {pred.statusFase === 'BIRAHI_AKTIF' ? (
+                                <span className="text-rose-700 font-bold">Siap kawin hari ini!</span>
+                              ) : (
+                                <span>Birahi: {formatTanggalIndo(pred.tanggalPerkiraanBirahiBerikutnya)}</span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </td>
 
                     {/* Umur */}
@@ -547,6 +743,16 @@ export const GoatTable: React.FC<GoatTableProps> = ({
                     {/* Aksi */}
                     <td className="py-3 px-4 text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-1">
+                        {goat.jenisKelamin === 'Betina' && onOpenEstrusRecord && (
+                          <button
+                            type="button"
+                            onClick={() => onOpenEstrusRecord(goat)}
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                            title="Catat Pengamatan Birahi / Kawin"
+                          >
+                            <Heart className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => onOpenQuickHealth(goat)}
@@ -669,6 +875,70 @@ export const GoatTable: React.FC<GoatTableProps> = ({
                     )}
                   </div>
                 </div>
+
+                {/* Estrus & Reproduction status chip (Female Goats) */}
+                {goat.jenisKelamin === 'Betina' && (
+                  <div className="px-2.5 py-1.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between gap-2" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                      {goat.statusReproduksi === 'Bunting' ? (
+                        <span className="text-[11px] font-bold text-purple-900 bg-purple-100 px-2 py-0.5 rounded-md border border-purple-200">
+                          🍼 Bunting (Gestasi)
+                        </span>
+                      ) : (() => {
+                        const pred = hitungPrediksiSiklusBirahi(goat);
+                        if (!pred.isEligible) {
+                          return (
+                            <span className="text-[11px] text-slate-500 italic">
+                              Siklus birahi belum direkam
+                            </span>
+                          );
+                        }
+                        return (
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold ${pred.badgeColor} ${pred.isAlarmActive ? 'animate-pulse' : ''}`}>
+                              {pred.statusFase === 'BIRAHI_AKTIF' && <Flame className="w-3 h-3 text-rose-600 fill-rose-600" />}
+                              {pred.statusFase === 'SIAGA_PROESTRUS' && <Heart className="w-3 h-3 text-amber-600 fill-amber-500" />}
+                              {pred.badgeLabel}
+                            </span>
+                            <span className="text-[10px] text-slate-500 truncate">
+                              {pred.statusFase === 'BIRAHI_AKTIF' 
+                                ? '🚨 Kawin hari ini!' 
+                                : `Perkiraan: ${formatTanggalIndo(pred.tanggalPerkiraanBirahiBerikutnya)}`}
+                            </span>
+                          </div>
+                        );
+                      })()}
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                      {(() => {
+                        const pred = hitungPrediksiSiklusBirahi(goat);
+                        if (pred.isAlarmActive) {
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => playEstrusAlarmSound()}
+                              className="p-1 rounded-md text-rose-600 hover:bg-rose-100"
+                              title="Bunyi Alarm"
+                            >
+                              <Volume2 className="w-3.5 h-3.5" />
+                            </button>
+                          );
+                        }
+                        return null;
+                      })()}
+                      {onOpenEstrusRecord && (
+                        <button
+                          type="button"
+                          onClick={() => onOpenEstrusRecord(goat)}
+                          className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 whitespace-nowrap"
+                        >
+                          Catat Birahi
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 {/* Actions row */}
                 <div className="flex items-center justify-between pt-1" onClick={(e) => e.stopPropagation()}>
