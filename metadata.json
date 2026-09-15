@@ -1,0 +1,6 @@
+{
+  "name": "Digital Recording Ternak Kambing RFID",
+  "description": "Aplikasi digital recording dan pengolahan data ternak kambing terintegrasi RFID untuk smartphone dan laptop",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
