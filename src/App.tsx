@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { GoatRecord, FilterOptions, CatatanKesehatan, StatusKesehatanUtama, CatatanPakanHarian, RiwayatBobot } from './types';
+import { GoatRecord, FilterOptions, CatatanKesehatan, StatusKesehatanUtama, CatatanPakanHarian, RiwayatBobot, KelompokTernak } from './types';
 import { loadGoats, saveGoats, resetToInitialData, exportGoatsToCSV, playBeepSound } from './utils/storage';
 import { Navbar } from './components/Navbar';
 import { DashboardStats } from './components/DashboardStats';
@@ -18,11 +18,12 @@ import { OfflineSyncModal } from './components/OfflineSyncModal';
 import { OfflineSyncIndicator } from './components/OfflineSyncIndicator';
 import { useOfflineSync, addToOfflineQueue } from './services/offlineSync';
 import { hitungPrediksiSiklusBirahi } from './utils/livestockScience';
-import { Radio, Plus, Layers } from 'lucide-react';
+import { Radio, Plus, Layers, ShieldCheck, Wifi, WifiOff } from 'lucide-react';
 
 export default function App() {
   const [goats, setGoats] = useState<GoatRecord[]>(() => loadGoats());
   const [activeTab, setActiveTab] = useState<'data' | 'analytics'>('data');
+  const [formDefaultKelompok, setFormDefaultKelompok] = useState<KelompokTernak>('Ternak Desa Sukamaju');
 
   // Filter state
   const [filterOptions, setFilterOptions] = useState<FilterOptions>({
@@ -33,6 +34,7 @@ export default function App() {
     jenisKelamin: '',
     umur: '',
     statusKesehatan: '',
+    kelompokTernak: 'all',
   });
 
   // Modals state
@@ -108,9 +110,10 @@ export default function App() {
       action: isExisting ? 'EDIT_TERNAK' : 'TAMBAH_TERNAK',
       nomorEartag: goatToSave.nomorEartag,
       namaPeternak: goatToSave.namaPeternak,
+      kelompokTernak: goatToSave.kelompokTernak,
       deskripsi: isExisting 
-        ? `Perbarui profil kambing #${goatToSave.nomorEartag} (${goatToSave.bangsaTernak})`
-        : `Registrasi ternak baru #${goatToSave.nomorEartag} (${goatToSave.bangsaTernak})`,
+        ? `Perbarui profil kambing #${goatToSave.nomorEartag} [${goatToSave.kelompokTernak === 'Bibit Kambing Terseleksi' ? 'Bibit Terseleksi' : 'Desa Sukamaju'}] (${goatToSave.bangsaTernak})`
+        : `Registrasi ternak baru #${goatToSave.nomorEartag} [${goatToSave.kelompokTernak === 'Bibit Kambing Terseleksi' ? 'Bibit Terseleksi' : 'Desa Sukamaju'}] (${goatToSave.bangsaTernak})`,
     });
 
     // Update detail modal if open
@@ -120,8 +123,8 @@ export default function App() {
 
     showNotification(
       !isOnline
-        ? `[Tersimpan Lokal] Data eartag #${goatToSave.nomorEartag} disimpan & siap disinkronkan saat online.`
-        : `Data ternak eartag #${goatToSave.nomorEartag} berhasil disimpan.`
+        ? `[Tersimpan Lokal - ${goatToSave.kelompokTernak === 'Bibit Kambing Terseleksi' ? 'Bibit Terseleksi' : 'Desa Sukamaju'}] Data eartag #${goatToSave.nomorEartag} disimpan & siap disinkronkan saat online.`
+        : `Data ternak eartag #${goatToSave.nomorEartag} (${goatToSave.kelompokTernak === 'Bibit Kambing Terseleksi' ? 'Bibit Terseleksi' : 'Desa Sukamaju'}) berhasil disimpan.`
     );
   };
 
@@ -132,7 +135,8 @@ export default function App() {
         addToOfflineQueue({
           action: 'HAPUS_TERNAK',
           nomorEartag: target.nomorEartag,
-          namaPeternak: target.peternak,
+          namaPeternak: target.namaPeternak,
+          kelompokTernak: target.kelompokTernak,
           deskripsi: `Penghapusan ternak #${target.nomorEartag}`,
         });
       }
@@ -156,7 +160,8 @@ export default function App() {
       addToOfflineQueue({
         action: 'TIMBANG_BOBOT',
         nomorEartag: target.nomorEartag,
-        namaPeternak: target.peternak,
+        namaPeternak: target.namaPeternak,
+        kelompokTernak: target.kelompokTernak,
         deskripsi: `Timbang cepat: ${newBobot} kg (${tanggal})`,
       });
     }
@@ -201,7 +206,8 @@ export default function App() {
       addToOfflineQueue({
         action: 'TIMBANG_BOBOT',
         nomorEartag: target.nomorEartag,
-        namaPeternak: target.peternak,
+        namaPeternak: target.namaPeternak,
+        kelompokTernak: target.kelompokTernak,
         deskripsi: `Riwayat bobot: ${record.bobot} kg (${record.tanggal})`,
       });
     }
@@ -288,7 +294,8 @@ export default function App() {
       addToOfflineQueue({
         action: 'CATAT_MEDIS',
         nomorEartag: target.nomorEartag,
-        namaPeternak: target.peternak,
+        namaPeternak: target.namaPeternak,
+        kelompokTernak: target.kelompokTernak,
         deskripsi: `Kesehatan: ${record.jenisPenyakit} - ${newStatus}`,
       });
     }
@@ -315,11 +322,15 @@ export default function App() {
   const handleSaveFeedRecord = (goatId: string, record: CatatanPakanHarian) => {
     const target = goats.find((g) => g.id === goatId);
     if (target) {
+      const feedDesc = record.jenisHijauan
+        ? `${record.jenisHijauan} (${record.takaranHijauanKg} kg) + ${record.jenisKonsentrat} (${record.takaranKonsentratKg} kg)`
+        : `Pakan harian ${record.tanggal}`;
       addToOfflineQueue({
         action: 'CATAT_PAKAN',
         nomorEartag: target.nomorEartag,
-        namaPeternak: target.peternak,
-        deskripsi: `Pakan: ${record.jenisPakan} (${record.jumlahKg} kg)`,
+        namaPeternak: target.namaPeternak,
+        kelompokTernak: target.kelompokTernak,
+        deskripsi: feedDesc,
       });
     }
 
@@ -404,6 +415,8 @@ export default function App() {
         jenisKelamin: '',
         umur: '',
         statusKesehatan: '',
+        statusBirahi: '',
+        kelompokTernak: 'all',
       });
     } else {
       setFilterOptions((prev) => ({
@@ -433,6 +446,11 @@ export default function App() {
         onOpenAddModal={() => {
           setGoatToEdit(null);
           setNewRfidPrefill('');
+          setFormDefaultKelompok(
+            filterOptions.kelompokTernak === 'Bibit Kambing Terseleksi'
+              ? 'Bibit Kambing Terseleksi'
+              : 'Ternak Desa Sukamaju'
+          );
           setIsGoatFormOpen(true);
         }}
         onExportCsv={handleExportCsv}
@@ -474,6 +492,7 @@ export default function App() {
             onSelectGoat={(g) => setSelectedGoatForDetail(g)}
             onEditGoat={(g) => {
               setGoatToEdit(g);
+              setFormDefaultKelompok(g.kelompokTernak || 'Ternak Desa Sukamaju');
               setIsGoatFormOpen(true);
             }}
             onDeleteGoat={handleDeleteGoat}
@@ -481,6 +500,12 @@ export default function App() {
             onOpenQuickHealth={(g) => setGoatForQuickHealth(g)}
             onOpenFeedRecord={(g) => setGoatForQuickFeed(g)}
             onOpenEstrusRecord={(g) => setGoatForEstrusRecord(g)}
+            onOpenAddModalWithKelompok={(kelompok) => {
+              setGoatToEdit(null);
+              setNewRfidPrefill('');
+              setFormDefaultKelompok(kelompok);
+              setIsGoatFormOpen(true);
+            }}
           />
         ) : (
           <AnalyticsView
@@ -608,6 +633,7 @@ export default function App() {
         existingPeternak={existingPeternak}
         existingLokasi={existingLokasi}
         initialRfidPrefill={newRfidPrefill}
+        defaultKelompok={formDefaultKelompok}
       />
 
       <HealthRecordModal

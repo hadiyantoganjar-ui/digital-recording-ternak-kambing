@@ -40,6 +40,15 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({
   const peternakSet = new Set(goats.map((g) => g.namaPeternak.trim()).filter(Boolean));
   const lokasiSet = new Set(goats.map((g) => g.lokasi.trim()).filter(Boolean));
 
+  // 2 Kelompok Data Counts
+  const sukamajuCount = useMemo(() => {
+    return goats.filter((g) => (g.kelompokTernak || 'Ternak Desa Sukamaju') === 'Ternak Desa Sukamaju').length;
+  }, [goats]);
+
+  const bibitTerseleksiCount = useMemo(() => {
+    return goats.filter((g) => g.kelompokTernak === 'Bibit Kambing Terseleksi').length;
+  }, [goats]);
+
   // Evaluasi Birahi Real-Time untuk Statistik Reproduksi
   const estrusStats = useMemo(() => {
     let birahiAktif = 0;
@@ -132,6 +141,63 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({
           </div>
         </div>
       )}
+
+      {/* 2 Kelompok Data Overview Bar */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+        <button
+          type="button"
+          onClick={() => onSelectQuickFilter && onSelectQuickFilter('kelompokTernak', 'Ternak Desa Sukamaju')}
+          className="p-3 rounded-2xl bg-gradient-to-r from-emerald-50 to-emerald-100/60 border border-emerald-200/90 hover:border-emerald-400 text-left flex items-center justify-between transition-all group shadow-2xs cursor-pointer"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center text-lg shadow-xs group-hover:scale-105 transition-transform">
+              🏡
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="font-extrabold text-sm text-slate-900 group-hover:text-emerald-800">
+                  Kelompok 1: Ternak Desa Sukamaju
+                </span>
+                <span className="text-[10px] font-bold px-1.5 py-0.2 bg-emerald-200 text-emerald-900 rounded">
+                  Baseline Desa
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-600">Populasi perekaman lapangan desa Sukamaju</p>
+            </div>
+          </div>
+          <div className="text-right pl-2">
+            <span className="text-xl sm:text-2xl font-black text-emerald-900">{sukamajuCount}</span>
+            <span className="text-[10px] text-emerald-700 block font-semibold">ekor</span>
+          </div>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => onSelectQuickFilter && onSelectQuickFilter('kelompokTernak', 'Bibit Kambing Terseleksi')}
+          className="p-3 rounded-2xl bg-gradient-to-r from-amber-50 to-amber-100/60 border border-amber-200/90 hover:border-amber-400 text-left flex items-center justify-between transition-all group shadow-2xs cursor-pointer"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center text-lg shadow-xs group-hover:scale-105 transition-transform">
+              ⭐
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="font-extrabold text-sm text-slate-900 group-hover:text-amber-800">
+                  Kelompok 2: Bibit Kambing Terseleksi
+                </span>
+                <span className="text-[10px] font-bold px-1.5 py-0.2 bg-amber-200 text-amber-900 rounded">
+                  {bibitTerseleksiCount === 0 ? 'Siap Input' : 'Terseleksi'}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-600">Calon bibit unggul baru terpilih</p>
+            </div>
+          </div>
+          <div className="text-right pl-2">
+            <span className="text-xl sm:text-2xl font-black text-amber-950">{bibitTerseleksiCount}</span>
+            <span className="text-[10px] text-amber-700 block font-semibold">ekor</span>
+          </div>
+        </button>
+      </div>
 
       {/* Grid 5 Metrik Utama */}
       <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">

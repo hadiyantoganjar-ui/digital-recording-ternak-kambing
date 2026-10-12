@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { GoatRecord, UmurKategori, JenisKelamin, StatusKesehatanUtama } from '../types';
-import { X, Save, Radio, Scale, User, MapPin } from 'lucide-react';
+import { GoatRecord, UmurKategori, JenisKelamin, StatusKesehatanUtama, KelompokTernak } from '../types';
+import { X, Save, Radio, Scale, User, MapPin, Award } from 'lucide-react';
 
 interface GoatFormModalProps {
   isOpen: boolean;
@@ -10,6 +10,7 @@ interface GoatFormModalProps {
   existingPeternak: string[];
   existingLokasi: string[];
   initialRfidPrefill?: string;
+  defaultKelompok?: KelompokTernak;
 }
 
 export const GoatFormModal: React.FC<GoatFormModalProps> = ({
@@ -20,7 +21,9 @@ export const GoatFormModal: React.FC<GoatFormModalProps> = ({
   existingPeternak,
   existingLokasi,
   initialRfidPrefill,
+  defaultKelompok = 'Ternak Desa Sukamaju',
 }) => {
+  const [kelompokTernak, setKelompokTernak] = useState<KelompokTernak>(defaultKelompok);
   const [nomorRfid, setNomorRfid] = useState('');
   const [nomorEartag, setNomorEartag] = useState('');
   const [namaPeternak, setNamaPeternak] = useState('');
@@ -38,6 +41,7 @@ export const GoatFormModal: React.FC<GoatFormModalProps> = ({
 
   useEffect(() => {
     if (initialGoat) {
+      setKelompokTernak(initialGoat.kelompokTernak || defaultKelompok);
       setNomorRfid(initialGoat.nomorRfid);
       setNomorEartag(initialGoat.nomorEartag);
       setNamaPeternak(initialGoat.namaPeternak);
@@ -53,6 +57,7 @@ export const GoatFormModal: React.FC<GoatFormModalProps> = ({
       setNomorInduk(initialGoat.nomorInduk || '');
       setCatatanTambahan(initialGoat.catatanTambahan || '');
     } else {
+      setKelompokTernak(defaultKelompok);
       // Generate new RFID if prefilled or create new default
       const randomSuffix = Math.floor(1000 + Math.random() * 9000);
       setNomorRfid(initialRfidPrefill || `11202518060${randomSuffix}`);
@@ -70,7 +75,7 @@ export const GoatFormModal: React.FC<GoatFormModalProps> = ({
       setNomorInduk('');
       setCatatanTambahan('');
     }
-  }, [initialGoat, isOpen, initialRfidPrefill, existingPeternak, existingLokasi]);
+  }, [initialGoat, isOpen, initialRfidPrefill, existingPeternak, existingLokasi, defaultKelompok]);
 
   if (!isOpen) return null;
 
@@ -82,6 +87,7 @@ export const GoatFormModal: React.FC<GoatFormModalProps> = ({
       id: initialGoat ? initialGoat.id : nomorRfid.trim() || `goat-${Date.now()}`,
       nomorRfid: nomorRfid.trim(),
       nomorEartag: nomorEartag.trim(),
+      kelompokTernak: kelompokTernak,
       namaPeternak: namaPeternak.trim() || 'Peternak',
       lokasi: lokasi.trim() || 'Sukamaju',
       bangsaTernak: bangsaTernak.trim(),
@@ -131,7 +137,7 @@ export const GoatFormModal: React.FC<GoatFormModalProps> = ({
                 {initialGoat ? 'Edit Data Ternak Kambing' : 'Perekaman Digital Ternak Baru'}
               </h3>
               <p className="text-xs text-emerald-200">
-                Pencatatan data identitas, RFID, dan manajemen pakan
+                Pencatatan data identitas, RFID, kelompok ternak, bobot, dan manajemen pakan
               </p>
             </div>
           </div>
@@ -146,6 +152,50 @@ export const GoatFormModal: React.FC<GoatFormModalProps> = ({
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-5 sm:p-6 space-y-4 max-h-[75vh] overflow-y-auto text-xs">
           
+          {/* Kelompok Data Selection */}
+          <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200">
+            <label className="font-bold text-slate-800 block mb-2 flex items-center justify-between">
+              <span>Kelompok Data Ternak *</span>
+              <span className="text-[10px] text-slate-500 font-normal">Sinkronisasi Offline & Online</span>
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setKelompokTernak('Ternak Desa Sukamaju')}
+                className={`p-2.5 rounded-xl border text-left flex items-start gap-2.5 transition-all ${
+                  kelompokTernak === 'Ternak Desa Sukamaju'
+                    ? 'bg-emerald-50/90 border-emerald-600 shadow-xs ring-2 ring-emerald-500/20'
+                    : 'bg-white border-slate-200 hover:border-slate-300'
+                }`}
+              >
+                <span className="text-lg">🏡</span>
+                <div>
+                  <div className="font-bold text-slate-900 text-xs">Ternak Desa Sukamaju</div>
+                  <div className="text-[10px] text-slate-500 mt-0.5 leading-tight">Kelompok 1 (Populasi Desa)</div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setKelompokTernak('Bibit Kambing Terseleksi')}
+                className={`p-2.5 rounded-xl border text-left flex items-start gap-2.5 transition-all ${
+                  kelompokTernak === 'Bibit Kambing Terseleksi'
+                    ? 'bg-amber-50/90 border-amber-600 shadow-xs ring-2 ring-amber-500/20'
+                    : 'bg-white border-slate-200 hover:border-slate-300'
+                }`}
+              >
+                <span className="text-lg">⭐</span>
+                <div>
+                  <div className="font-bold text-slate-900 text-xs flex items-center gap-1">
+                    <span>Bibit Terseleksi</span>
+                    <span className="text-[9px] px-1 py-0.2 bg-amber-200 text-amber-900 font-bold rounded">Data Baru</span>
+                  </div>
+                  <div className="text-[10px] text-slate-500 mt-0.5 leading-tight">Kelompok 2 (Calon Bibit Unggul)</div>
+                </div>
+              </button>
+            </div>
+          </div>
+
           {/* RFID & Eartag Row */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>

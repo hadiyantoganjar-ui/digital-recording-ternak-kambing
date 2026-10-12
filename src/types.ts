@@ -95,10 +95,15 @@ export interface AnalisisEfisiensiPakanInterval {
   biayaPerKgPertambahan: number; // Rp / kg pertambahan bobot
 }
 
+export type KelompokTernak = 
+  | 'Ternak Desa Sukamaju'
+  | 'Bibit Kambing Terseleksi';
+
 export interface GoatRecord {
   id: string;
   nomorRfid: string;
   nomorEartag: string;
+  kelompokTernak: KelompokTernak;
   namaPeternak: string;
   lokasi: string;
   bangsaTernak: string; // misal: PE, Boer, Saburai, Rambon, Jawa Randu, dll
@@ -190,4 +195,5 @@ export interface FilterOptions {
   umur: string;
   statusKesehatan: string;
   statusBirahi?: string;
+  kelompokTernak?: string;
 }

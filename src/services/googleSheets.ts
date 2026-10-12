@@ -1,4 +1,4 @@
-import { GoatRecord, UmurKategori, JenisKelamin, StatusKesehatanUtama, RiwayatBobot } from '../types';
+import { GoatRecord, UmurKategori, JenisKelamin, StatusKesehatanUtama, RiwayatBobot, KelompokTernak } from '../types';
 
 export interface GoogleSpreadsheetItem {
   id: string;
@@ -201,6 +201,7 @@ export async function syncDataToSpreadsheet(
   const masterHeader = [
     'Nomor RFID',
     'Nomor Eartag',
+    'Kelompok Ternak',
     'Nama Peternak',
     'Lokasi / Kandang',
     'Bangsa Ternak',
@@ -218,6 +219,7 @@ export async function syncDataToSpreadsheet(
   const masterRows = goats.map((g) => [
     g.nomorRfid || '',
     g.nomorEartag || '',
+    g.kelompokTernak || 'Ternak Desa Sukamaju',
     g.namaPeternak || '',
     g.lokasi || '',
     g.bangsaTernak || '',
@@ -366,6 +368,7 @@ export async function importGoatsFromSpreadsheet(accessToken: string, spreadshee
   const colUmur = headerRow.findIndex((h) => h.includes('umur'));
   const colKelamin = headerRow.findIndex((h) => h.includes('kelamin') || h.includes('sex'));
   const colKesehatan = headerRow.findIndex((h) => h.includes('kesehatan') || h.includes('status'));
+  const colKelompok = headerRow.findIndex((h) => h.includes('kelompok'));
   const colPejantan = headerRow.findIndex((h) => h.includes('pejantan') || h.includes('bapak') || h.includes('sire'));
   const colInduk = headerRow.findIndex((h) => h.includes('induk') || h.includes('ibu') || h.includes('dam'));
   const colTanggalReg = headerRow.findIndex((h) => h.includes('registrasi') || h.includes('tanggal'));
@@ -490,10 +493,16 @@ export async function importGoatsFromSpreadsheet(accessToken: string, spreadshee
 
     const latestWeight = riwayatBobot[riwayatBobot.length - 1].bobot || rawBobot;
 
+    const rawKelompok = (colKelompok >= 0 ? row[colKelompok] : '')?.trim();
+    const kelompokTernak: KelompokTernak = rawKelompok && rawKelompok.toLowerCase().includes('terseleksi')
+      ? 'Bibit Kambing Terseleksi'
+      : 'Ternak Desa Sukamaju';
+
     importedGoats.push({
       id: nomorRfid,
       nomorRfid,
       nomorEartag,
+      kelompokTernak,
       namaPeternak,
       lokasi,
       bangsaTernak,

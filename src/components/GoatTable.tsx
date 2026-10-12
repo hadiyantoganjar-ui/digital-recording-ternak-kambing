@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { GoatRecord, FilterOptions } from '../types';
+import { GoatRecord, FilterOptions, KelompokTernak } from '../types';
 import { 
   Search, 
   Filter, 
@@ -21,7 +21,9 @@ import {
   Plus,
   Heart,
   Flame,
-  Volume2
+  Volume2,
+  Award,
+  Users
 } from 'lucide-react';
 import { 
   hitungAdgAntarTimbang, 
@@ -43,6 +45,7 @@ interface GoatTableProps {
   onOpenQuickHealth: (goat: GoatRecord) => void;
   onOpenFeedRecord?: (goat: GoatRecord) => void;
   onOpenEstrusRecord?: (goat: GoatRecord) => void;
+  onOpenAddModalWithKelompok?: (kelompok: KelompokTernak) => void;
 }
 
 export const GoatTable: React.FC<GoatTableProps> = ({
@@ -56,6 +59,7 @@ export const GoatTable: React.FC<GoatTableProps> = ({
   onOpenQuickHealth,
   onOpenFeedRecord,
   onOpenEstrusRecord,
+  onOpenAddModalWithKelompok,
 }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(25);
@@ -74,9 +78,26 @@ export const GoatTable: React.FC<GoatTableProps> = ({
     return Array.from(new Set(goats.map((g) => g.lokasi.trim()).filter(Boolean))).sort();
   }, [goats]);
 
+  // Counts per kelompok
+  const sukamajuCount = useMemo(() => {
+    return goats.filter((g) => (g.kelompokTernak || 'Ternak Desa Sukamaju') === 'Ternak Desa Sukamaju').length;
+  }, [goats]);
+
+  const bibitTerseleksiCount = useMemo(() => {
+    return goats.filter((g) => g.kelompokTernak === 'Bibit Kambing Terseleksi').length;
+  }, [goats]);
+
   // Filter logic
   const filteredGoats = useMemo(() => {
     return goats.filter((goat) => {
+      // Kelompok filter
+      if (filterOptions.kelompokTernak && filterOptions.kelompokTernak !== 'all') {
+        const itemKelompok = goat.kelompokTernak || 'Ternak Desa Sukamaju';
+        if (itemKelompok !== filterOptions.kelompokTernak) {
+          return false;
+        }
+      }
+
       // Search query
       if (filterOptions.searchQuery) {
         const query = filterOptions.searchQuery.toLowerCase().trim();
@@ -170,6 +191,7 @@ export const GoatTable: React.FC<GoatTableProps> = ({
       umur: '',
       statusKesehatan: '',
       statusBirahi: '',
+      kelompokTernak: 'all',
     });
     setCurrentPage(1);
   };
@@ -182,7 +204,8 @@ export const GoatTable: React.FC<GoatTableProps> = ({
     filterOptions.jenisKelamin || 
     filterOptions.umur || 
     filterOptions.statusKesehatan ||
-    filterOptions.statusBirahi;
+    filterOptions.statusBirahi ||
+    (filterOptions.kelompokTernak && filterOptions.kelompokTernak !== 'all');
 
   return (
     <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
@@ -190,6 +213,98 @@ export const GoatTable: React.FC<GoatTableProps> = ({
       {/* Search and Filters Header */}
       <div className="p-4 sm:p-5 border-b border-slate-200/80 bg-slate-50/50 space-y-3">
         
+        {/* Kelompok Data Switcher Bar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2.5 border-b border-slate-200/80">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap mr-1">
+              Kelompok Data:
+            </span>
+            <button
+              onClick={() => {
+                setFilterOptions((prev) => ({ ...prev, kelompokTernak: 'all' }));
+                setCurrentPage(1);
+              }}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap flex items-center gap-1.5 transition-all ${
+                !filterOptions.kelompokTernak || filterOptions.kelompokTernak === 'all'
+                  ? 'bg-slate-900 text-white shadow-xs'
+                  : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-300'
+              }`}
+            >
+              <span>Semua Kelompok</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                !filterOptions.kelompokTernak || filterOptions.kelompokTernak === 'all'
+                  ? 'bg-slate-700 text-white'
+                  : 'bg-slate-100 text-slate-600'
+              }`}>
+                {goats.length}
+              </span>
+            </button>
+
+            <button
+              onClick={() => {
+                setFilterOptions((prev) => ({ ...prev, kelompokTernak: 'Ternak Desa Sukamaju' }));
+                setCurrentPage(1);
+              }}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap flex items-center gap-1.5 transition-all ${
+                filterOptions.kelompokTernak === 'Ternak Desa Sukamaju'
+                  ? 'bg-emerald-700 text-white shadow-xs'
+                  : 'bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-200'
+              }`}
+            >
+              <span>🏡 Ternak Desa Sukamaju</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                filterOptions.kelompokTernak === 'Ternak Desa Sukamaju'
+                  ? 'bg-emerald-800 text-emerald-100'
+                  : 'bg-emerald-100 text-emerald-800'
+              }`}>
+                {sukamajuCount}
+              </span>
+            </button>
+
+            <button
+              onClick={() => {
+                setFilterOptions((prev) => ({ ...prev, kelompokTernak: 'Bibit Kambing Terseleksi' }));
+                setCurrentPage(1);
+              }}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap flex items-center gap-1.5 transition-all ${
+                filterOptions.kelompokTernak === 'Bibit Kambing Terseleksi'
+                  ? 'bg-amber-500 text-slate-950 font-black shadow-xs ring-1 ring-amber-400'
+                  : 'bg-white hover:bg-amber-50 text-amber-900 border border-amber-300'
+              }`}
+            >
+              <span>⭐ Bibit Kambing Terseleksi</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                filterOptions.kelompokTernak === 'Bibit Kambing Terseleksi'
+                  ? 'bg-amber-600 text-white'
+                  : 'bg-amber-100 text-amber-800'
+              }`}>
+                {bibitTerseleksiCount}
+              </span>
+              {bibitTerseleksiCount === 0 && (
+                <span className="text-[9px] px-1.5 py-0.2 bg-amber-200 text-amber-900 font-extrabold rounded">Kosong</span>
+              )}
+            </button>
+          </div>
+
+          {onOpenAddModalWithKelompok && (
+            <button
+              onClick={() => onOpenAddModalWithKelompok(
+                filterOptions.kelompokTernak === 'Bibit Kambing Terseleksi'
+                  ? 'Bibit Kambing Terseleksi'
+                  : 'Ternak Desa Sukamaju'
+              )}
+              className="text-xs font-bold px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1 shadow-xs self-start sm:self-auto shrink-0 transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>
+                {filterOptions.kelompokTernak === 'Bibit Kambing Terseleksi'
+                  ? '+ Tambah Bibit Terseleksi'
+                  : '+ Tambah Ternak'}
+              </span>
+            </button>
+          )}
+        </div>
+
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
           {/* Search bar */}
           <div className="relative flex-1 max-w-lg">
@@ -305,7 +420,26 @@ export const GoatTable: React.FC<GoatTableProps> = ({
         </div>
 
         {/* Filter Dropdown Selects */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2 pt-1">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 pt-1">
+          {/* Kelompok Data Dropdown */}
+          <div>
+            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+              Kelompok
+            </label>
+            <select
+              value={filterOptions.kelompokTernak || 'all'}
+              onChange={(e) => {
+                setFilterOptions((prev) => ({ ...prev, kelompokTernak: e.target.value }));
+                setCurrentPage(1);
+              }}
+              className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 focus:border-emerald-600 focus:outline-none"
+            >
+              <option value="all">Semua ({goats.length})</option>
+              <option value="Ternak Desa Sukamaju">🏡 Sukamaju ({sukamajuCount})</option>
+              <option value="Bibit Kambing Terseleksi">⭐ Bibit Terseleksi ({bibitTerseleksiCount})</option>
+            </select>
+          </div>
+
           {/* Status Birahi Dropdown */}
           <div>
             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
@@ -461,16 +595,43 @@ export const GoatTable: React.FC<GoatTableProps> = ({
             {paginatedGoats.length === 0 ? (
               <tr>
                 <td colSpan={10} className="py-12 text-center text-slate-400">
-                  <div className="flex flex-col items-center justify-center gap-2">
-                    <Radio className="w-8 h-8 text-slate-300" />
-                    <p className="text-sm font-semibold text-slate-600">Tidak ada data ternak yang cocok</p>
-                    <button
-                      onClick={resetFilters}
-                      className="text-xs text-emerald-600 hover:underline"
-                    >
-                      Bersihkan filter pencarian
-                    </button>
-                  </div>
+                  {filterOptions.kelompokTernak === 'Bibit Kambing Terseleksi' && bibitTerseleksiCount === 0 ? (
+                    <div className="flex flex-col items-center justify-center gap-3 max-w-md mx-auto p-4">
+                      <div className="w-14 h-14 rounded-2xl bg-amber-100 border border-amber-300 flex items-center justify-center text-2xl shadow-xs">
+                        ⭐
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-slate-800">
+                          Kelompok Bibit Kambing Terseleksi Masih Kosong
+                        </h4>
+                        <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                          Kelompok data kedua ini disiapkan khusus untuk pencatatan bibit kambing terseleksi baru.
+                          Data tersimpan lokal dan tersinkronisasi otomatis secara offline dan online.
+                        </p>
+                      </div>
+                      {onOpenAddModalWithKelompok && (
+                        <button
+                          type="button"
+                          onClick={() => onOpenAddModalWithKelompok('Bibit Kambing Terseleksi')}
+                          className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-md transition-all active:scale-95"
+                        >
+                          <Plus className="w-4 h-4" />
+                          <span>+ Daftarkan Bibit Terseleksi Pertama</span>
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <Radio className="w-8 h-8 text-slate-300" />
+                      <p className="text-sm font-semibold text-slate-600">Tidak ada data ternak yang cocok</p>
+                      <button
+                        onClick={resetFilters}
+                        className="text-xs text-emerald-600 hover:underline"
+                      >
+                        Bersihkan filter pencarian
+                      </button>
+                    </div>
+                  )}
                 </td>
               </tr>
             ) : (
@@ -511,8 +672,17 @@ export const GoatTable: React.FC<GoatTableProps> = ({
                           #{goat.nomorEartag}
                         </div>
                         <div>
-                          <div className="font-extrabold text-slate-900 group-hover:text-emerald-700 transition-colors">
-                            Eartag: {goat.nomorEartag}
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-extrabold text-slate-900 group-hover:text-emerald-700 transition-colors">
+                              Eartag: {goat.nomorEartag}
+                            </span>
+                            <span className={`text-[10px] px-1.5 py-0.2 rounded font-bold ${
+                              goat.kelompokTernak === 'Bibit Kambing Terseleksi'
+                                ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                                : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                            }`}>
+                              {goat.kelompokTernak === 'Bibit Kambing Terseleksi' ? '⭐ Bibit Terseleksi' : '🏡 Sukamaju'}
+                            </span>
                           </div>
                           <div className="flex items-center gap-1 font-mono text-[11px] text-slate-500">
                             <span>{goat.nomorRfid}</span>
@@ -791,10 +961,38 @@ export const GoatTable: React.FC<GoatTableProps> = ({
       <div className="md:hidden divide-y divide-slate-100">
         {paginatedGoats.length === 0 ? (
           <div className="py-12 text-center text-slate-400 p-4">
-            <p className="text-sm font-semibold text-slate-600">Tidak ada data ditemukan</p>
-            <button onClick={resetFilters} className="text-xs text-emerald-600 mt-2 underline">
-              Reset filter
-            </button>
+            {filterOptions.kelompokTernak === 'Bibit Kambing Terseleksi' && bibitTerseleksiCount === 0 ? (
+              <div className="flex flex-col items-center justify-center gap-3 max-w-xs mx-auto">
+                <div className="w-12 h-12 rounded-2xl bg-amber-100 border border-amber-300 flex items-center justify-center text-xl shadow-xs">
+                  ⭐
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-slate-800">
+                    Bibit Terseleksi Masih Kosong
+                  </h4>
+                  <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                    Kelompok data kedua disiapkan untuk pencatatan bibit baru terpilih secara offline & online.
+                  </p>
+                </div>
+                {onOpenAddModalWithKelompok && (
+                  <button
+                    type="button"
+                    onClick={() => onOpenAddModalWithKelompok('Bibit Kambing Terseleksi')}
+                    className="px-3 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs flex items-center gap-1 shadow-md transition-all active:scale-95"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>+ Daftarkan Bibit Terseleksi</span>
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div>
+                <p className="text-sm font-semibold text-slate-600">Tidak ada data ditemukan</p>
+                <button onClick={resetFilters} className="text-xs text-emerald-600 mt-2 underline">
+                  Reset filter
+                </button>
+              </div>
+            )}
           </div>
         ) : (
           paginatedGoats.map((goat) => {
@@ -828,7 +1026,7 @@ export const GoatTable: React.FC<GoatTableProps> = ({
                       #{goat.nomorEartag}
                     </div>
                     <div>
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="font-extrabold text-sm text-slate-900">
                           {goat.bangsaTernak}
                         </span>
@@ -838,6 +1036,13 @@ export const GoatTable: React.FC<GoatTableProps> = ({
                             : 'bg-rose-100 text-rose-800'
                         }`}>
                           {goat.jenisKelamin}
+                        </span>
+                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                          goat.kelompokTernak === 'Bibit Kambing Terseleksi'
+                            ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                            : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                        }`}>
+                          {goat.kelompokTernak === 'Bibit Kambing Terseleksi' ? '⭐ Bibit' : '🏡 Sukamaju'}
                         </span>
                       </div>
                       <div className="text-[11px] font-mono text-slate-500">

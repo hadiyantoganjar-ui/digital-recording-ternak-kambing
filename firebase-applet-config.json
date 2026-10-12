@@ -3,6 +3,7 @@
   "appId": "1:307803627173:web:eafd66cfeaef03181fb74c",
   "apiKey": "AIzaSyBLvwrkbV04DDEIdVCu2zjNYSNXW9cPcCc",
   "authDomain": "spry-elysium-5vd6f.firebaseapp.com",
+  "firestoreDatabaseId": "ai-studio-digitalrecording-80f395c0-501e-449d-8b0a-e337661aa395",
   "storageBucket": "spry-elysium-5vd6f.firebasestorage.app",
   "messagingSenderId": "307803627173",
   "measurementId": "",

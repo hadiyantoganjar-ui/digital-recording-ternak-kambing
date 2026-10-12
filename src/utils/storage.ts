@@ -31,16 +31,24 @@ export function loadGoats(): GoatRecord[] {
 
         filtered = filtered.map((g) => {
           const sample = initialMap.get(g.nomorEartag);
+          const kelompokTernak = g.kelompokTernak === 'Bibit Kambing Terseleksi' 
+            ? 'Bibit Kambing Terseleksi' 
+            : 'Ternak Desa Sukamaju';
+
           if (sample && !g.tanggalBirahiTerakhir && sample.tanggalBirahiTerakhir) {
             return {
               ...g,
+              kelompokTernak,
               statusReproduksi: g.statusReproduksi || sample.statusReproduksi,
               tanggalBirahiTerakhir: sample.tanggalBirahiTerakhir,
               riwayatBirahi: sample.riwayatBirahi,
               riwayatKebuntingan: sample.riwayatKebuntingan,
             };
           }
-          return g;
+          return {
+            ...g,
+            kelompokTernak,
+          };
         });
 
         saveGoats(filtered);
@@ -129,6 +137,7 @@ export function exportGoatsToCSV(goats: GoatRecord[]): void {
   const headers = [
     'Nomor RFID',
     'Nomor Eartag',
+    'Kelompok Ternak',
     'Jenis Kelamin',
     'Umur',
     'Bangsa Ternak',
@@ -149,10 +158,11 @@ export function exportGoatsToCSV(goats: GoatRecord[]): void {
     return [
       `"${g.nomorRfid}"`,
       `"${g.nomorEartag}"`,
+      `"${g.kelompokTernak || 'Ternak Desa Sukamaju'}"`,
       `"${g.jenisKelamin}"`,
       `"${g.umur}"`,
       `"${g.bangsaTernak}"`,
-      g.bobotBadan,
+      `"${g.bobotBadan}"`,
       `"${g.statusKesehatan}"`,
       `"${g.namaPeternak}"`,
       `"${g.lokasi}"`,

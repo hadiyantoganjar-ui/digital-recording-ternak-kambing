@@ -224,6 +224,13 @@ export const RfidScannerModal: React.FC<RfidScannerModalProps> = ({
                       }`}>
                         {matchedGoat.jenisKelamin}
                       </span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        matchedGoat.kelompokTernak === 'Bibit Kambing Terseleksi'
+                          ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                          : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                      }`}>
+                        {matchedGoat.kelompokTernak === 'Bibit Kambing Terseleksi' ? '⭐ Bibit Terseleksi' : '🏡 Desa Sukamaju'}
+                      </span>
                     </div>
                     <div className="text-xs text-slate-500 font-mono mt-0.5">
                       RFID: {matchedGoat.nomorRfid}

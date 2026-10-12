@@ -229,7 +229,7 @@ export const GoatDetailModal: React.FC<GoatDetailModalProps> = ({
                 🐐
               </div>
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <h3 className="text-xl font-extrabold tracking-tight">
                     Ternak Eartag #{goat.nomorEartag}
                   </h3>
@@ -239,6 +239,13 @@ export const GoatDetailModal: React.FC<GoatDetailModalProps> = ({
                       : 'bg-rose-400/20 text-rose-200 border border-rose-400/40'
                   }`}>
                     {goat.jenisKelamin}
+                  </span>
+                  <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                    goat.kelompokTernak === 'Bibit Kambing Terseleksi'
+                      ? 'bg-amber-400/20 text-amber-200 border border-amber-400/40'
+                      : 'bg-emerald-400/20 text-emerald-200 border border-emerald-400/40'
+                  }`}>
+                    {goat.kelompokTernak === 'Bibit Kambing Terseleksi' ? '⭐ Bibit Terseleksi' : '🏡 Desa Sukamaju'}
                   </span>
                 </div>
                 <div className="flex items-center gap-2 mt-1 text-xs text-emerald-200">

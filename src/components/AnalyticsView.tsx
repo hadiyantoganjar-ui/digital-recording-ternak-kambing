@@ -52,7 +52,22 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
   onFilterByBangsa,
   onFilterByPeternak,
 }) => {
-  const total = goats.length;
+  const [selectedKelompok, setSelectedKelompok] = useState<'all' | 'Ternak Desa Sukamaju' | 'Bibit Kambing Terseleksi'>('all');
+
+  const sukamajuCount = useMemo(() => {
+    return goats.filter((g) => (g.kelompokTernak || 'Ternak Desa Sukamaju') === 'Ternak Desa Sukamaju').length;
+  }, [goats]);
+
+  const bibitTerseleksiCount = useMemo(() => {
+    return goats.filter((g) => g.kelompokTernak === 'Bibit Kambing Terseleksi').length;
+  }, [goats]);
+
+  const activeGoats = useMemo(() => {
+    if (selectedKelompok === 'all') return goats;
+    return goats.filter((g) => (g.kelompokTernak || 'Ternak Desa Sukamaju') === selectedKelompok);
+  }, [goats, selectedKelompok]);
+
+  const total = activeGoats.length;
 
   // Real-time market state hook
   const {
@@ -109,7 +124,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
       'Bibit/Bakalan': 0,
     };
 
-    goats.forEach((g) => {
+    activeGoats.forEach((g) => {
       const pred = hitungPrediksiHargaRealtimeArea(
         g.bobotBadan,
         g.jenisKelamin,
@@ -134,12 +149,12 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
       avgPrice,
       categoryCount,
     };
-  }, [goats, total, selectedMarket, averageJantanKurban, averageBetinaInduk]);
+  }, [activeGoats, total, selectedMarket, averageJantanKurban, averageBetinaInduk]);
 
   // 2. Bangsa stats
   const bangsaStats = useMemo(() => {
     const map: Record<string, { count: number; totalBobot: number; jantan: number; betina: number }> = {};
-    goats.forEach((g) => {
+    activeGoats.forEach((g) => {
       const b = g.bangsaTernak || 'Lainnya';
       if (!map[b]) {
         map[b] = { count: 0, totalBobot: 0, jantan: 0, betina: 0 };
@@ -154,13 +169,13 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
       .map(([bangsa, stat]) => ({
         bangsa,
         count: stat.count,
-        percent: Math.round((stat.count / total) * 100),
-        avgBobot: Math.round((stat.totalBobot / stat.count) * 10) / 10,
+        percent: total > 0 ? Math.round((stat.count / total) * 100) : 0,
+        avgBobot: stat.count > 0 ? Math.round((stat.totalBobot / stat.count) * 10) / 10 : 0,
         jantan: stat.jantan,
         betina: stat.betina,
       }))
       .sort((a, b) => b.count - a.count);
-  }, [goats, total]);
+  }, [activeGoats, total]);
 
   // 3. Umur & Bobot stats
   const umurStats = useMemo(() => {
@@ -173,7 +188,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
       I4: { count: 0, totalBobot: 0, jantan: 0, betina: 0 },
     };
 
-    goats.forEach((g) => {
+    activeGoats.forEach((g) => {
       const u = g.umur in map ? g.umur : 'I0';
       map[u].count++;
       map[u].totalBobot += g.bobotBadan || 0;
@@ -196,12 +211,12 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
         avgBobot: stat.count > 0 ? Math.round((stat.totalBobot / stat.count) * 10) / 10 : 0,
       };
     });
-  }, [goats, total]);
+  }, [activeGoats, total]);
 
   // 4. Peternak Leaderboard
   const peternakStats = useMemo(() => {
     const map: Record<string, { count: number; lokasi: string; totalBobot: number }> = {};
-    goats.forEach((g) => {
+    activeGoats.forEach((g) => {
       const p = g.namaPeternak.trim() || 'Peternak';
       if (!map[p]) {
         map[p] = { count: 0, lokasi: g.lokasi, totalBobot: 0 };
@@ -215,15 +230,15 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
         nama,
         lokasi: stat.lokasi,
         count: stat.count,
-        avgBobot: Math.round((stat.totalBobot / stat.count) * 10) / 10,
+        avgBobot: stat.count > 0 ? Math.round((stat.totalBobot / stat.count) * 10) / 10 : 0,
       }))
       .sort((a, b) => b.count - a.count);
-  }, [goats]);
+  }, [activeGoats]);
 
   // 5. Health Summary
   const healthStats = useMemo(() => {
     const cases: Array<{ goat: GoatRecord; penyakit: string; obat: string; tanggal: string; kondisi: string }> = [];
-    goats.forEach((g) => {
+    activeGoats.forEach((g) => {
       if (g.riwayatKesehatan && g.riwayatKesehatan.length > 0) {
         g.riwayatKesehatan.forEach((med) => {
           if (med.jenisPenyakit && !med.jenisPenyakit.toLowerCase().includes('rutin')) {
@@ -239,11 +254,53 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
       }
     });
     return cases;
-  }, [goats]);
+  }, [activeGoats]);
 
   return (
     <div className="space-y-6">
       
+      {/* Kelompok Filter Switcher for Analytics */}
+      <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-2 overflow-x-auto">
+          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">
+            Analisis Kelompok:
+          </span>
+          <button
+            onClick={() => setSelectedKelompok('all')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+              selectedKelompok === 'all'
+                ? 'bg-slate-900 text-white shadow-xs'
+                : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+            }`}
+          >
+            Semua Data ({goats.length})
+          </button>
+          <button
+            onClick={() => setSelectedKelompok('Ternak Desa Sukamaju')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+              selectedKelompok === 'Ternak Desa Sukamaju'
+                ? 'bg-emerald-700 text-white shadow-xs'
+                : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200'
+            }`}
+          >
+            🏡 Ternak Desa Sukamaju ({sukamajuCount})
+          </button>
+          <button
+            onClick={() => setSelectedKelompok('Bibit Kambing Terseleksi')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+              selectedKelompok === 'Bibit Kambing Terseleksi'
+                ? 'bg-amber-500 text-slate-950 font-black shadow-xs ring-1 ring-amber-400'
+                : 'bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300'
+            }`}
+          >
+            ⭐ Bibit Terseleksi ({bibitTerseleksiCount})
+          </button>
+        </div>
+        <span className="text-xs text-slate-500">
+          Menganalisis <strong className="text-slate-900">{activeGoats.length}</strong> ekor ternak
+        </span>
+      </div>
+
       {/* Top Banner: Total Valuasi Populasi & Aset Ternak */}
       <div className="bg-gradient-to-br from-emerald-900 via-emerald-800 to-teal-950 rounded-3xl p-6 sm:p-7 text-white shadow-lg border border-emerald-700/60">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">

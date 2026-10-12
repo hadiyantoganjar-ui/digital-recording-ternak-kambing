@@ -158,8 +158,17 @@ export const OfflineSyncModal: React.FC<OfflineSyncModalProps> = ({
                 {pendingItems.map((item) => (
                   <div key={item.id} className="p-2.5 bg-amber-50/50 rounded-xl border border-amber-200/80 text-xs flex items-center justify-between">
                     <div>
-                      <div className="font-bold text-slate-800 flex items-center gap-1.5">
+                      <div className="font-bold text-slate-800 flex items-center gap-1.5 flex-wrap">
                         <span className="font-mono text-emerald-800">#{item.nomorEartag}</span>
+                        {item.kelompokTernak && (
+                          <span className={`text-[10px] px-1.5 py-0.2 rounded font-semibold ${
+                            item.kelompokTernak === 'Bibit Kambing Terseleksi'
+                              ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                              : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                          }`}>
+                            {item.kelompokTernak === 'Bibit Kambing Terseleksi' ? '⭐ Bibit Terseleksi' : '🏡 Sukamaju'}
+                          </span>
+                        )}
                         <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-200 text-amber-900 font-bold">
                           {item.action.replace('_', ' ')}
                         </span>

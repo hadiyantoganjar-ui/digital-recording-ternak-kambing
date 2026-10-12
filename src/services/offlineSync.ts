@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { KelompokTernak } from '../types';
 
 export interface OfflineQueueItem {
   id: string;
@@ -6,6 +7,7 @@ export interface OfflineQueueItem {
   action: 'TAMBAH_TERNAK' | 'EDIT_TERNAK' | 'HAPUS_TERNAK' | 'TIMBANG_BOBOT' | 'CATAT_MEDIS' | 'CATAT_PAKAN' | 'CATAT_BIRAHI';
   nomorEartag: string;
   namaPeternak: string;
+  kelompokTernak?: KelompokTernak;
   deskripsi: string;
   synced: boolean;
 }
@@ -36,6 +38,7 @@ export function addToOfflineQueue(item: {
   action: OfflineQueueItem['action'];
   nomorEartag: string;
   namaPeternak?: string;
+  kelompokTernak?: KelompokTernak;
   deskripsi: string;
 }): OfflineQueueItem {
   const queue = getOfflineQueue();
@@ -45,6 +48,7 @@ export function addToOfflineQueue(item: {
     action: item.action,
     nomorEartag: item.nomorEartag,
     namaPeternak: item.namaPeternak || 'Peternak Lapangan',
+    kelompokTernak: item.kelompokTernak,
     deskripsi: item.deskripsi,
     synced: false,
   };

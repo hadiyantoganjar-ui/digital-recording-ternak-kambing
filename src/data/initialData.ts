@@ -7,7 +7,8 @@ import {
   CatatanPakanHarian,
   StatusReproduksi,
   CatatanBirahi,
-  CatatanKebuntingan
+  CatatanKebuntingan,
+  KelompokTernak
 } from '../types';
 
 // Raw CSV data parsed from field recording
@@ -617,6 +618,7 @@ export function parseInitialData(): GoatRecord[] {
       id: nomorRfid || `goat-${idx}`,
       nomorRfid: nomorRfid,
       nomorEartag: nomorEartag || `ET-${idx + 1}`,
+      kelompokTernak: 'Ternak Desa Sukamaju' as KelompokTernak,
       namaPeternak: namaPeternak,
       lokasi: lokasi,
       bangsaTernak: bangsaTernak,
