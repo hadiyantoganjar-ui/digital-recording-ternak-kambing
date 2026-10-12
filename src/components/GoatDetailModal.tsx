@@ -34,7 +34,8 @@ import {
   Minus,
   Heart,
   Flame,
-  Volume2
+  Volume2,
+  ArrowRightLeft
 } from 'lucide-react';
 import { 
   hitungAdgAntarTimbang, 
@@ -61,6 +62,7 @@ interface GoatDetailModalProps {
   onOpenFeedRecord?: (goat: GoatRecord) => void;
   onOpenEstrusRecord?: (goat: GoatRecord) => void;
   onEditGoat: (goat: GoatRecord) => void;
+  onToggleKelompok?: (goatId: string) => void;
   onSaveWeightRecord?: (goatId: string, record: RiwayatBobot, recordIndex?: number) => void;
   onDeleteWeightRecord?: (goatId: string, recordIndex: number) => void;
 }
@@ -73,6 +75,7 @@ export const GoatDetailModal: React.FC<GoatDetailModalProps> = ({
   onOpenFeedRecord,
   onOpenEstrusRecord,
   onEditGoat,
+  onToggleKelompok,
   onSaveWeightRecord,
   onDeleteWeightRecord,
 }) => {
@@ -242,10 +245,10 @@ export const GoatDetailModal: React.FC<GoatDetailModalProps> = ({
                   </span>
                   <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
                     goat.kelompokTernak === 'Bibit Kambing Terseleksi'
-                      ? 'bg-amber-400/20 text-amber-200 border border-amber-400/40'
-                      : 'bg-emerald-400/20 text-emerald-200 border border-emerald-400/40'
+                      ? 'bg-amber-400/25 text-amber-200 border border-amber-400/40'
+                      : 'bg-emerald-400/25 text-emerald-200 border border-emerald-400/40'
                   }`}>
-                    {goat.kelompokTernak === 'Bibit Kambing Terseleksi' ? '⭐ Bibit Terseleksi' : '🏡 Desa Sukamaju'}
+                    {goat.kelompokTernak === 'Bibit Kambing Terseleksi' ? '⭐ Kelompok 2: Bibit Terseleksi' : '🏡 Kelompok 1: Desa Sukamaju'}
                   </span>
                 </div>
                 <div className="flex items-center gap-2 mt-1 text-xs text-emerald-200">
@@ -381,6 +384,40 @@ export const GoatDetailModal: React.FC<GoatDetailModalProps> = ({
           {activeSubTab === 'profil' && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3 text-xs">
+                <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200/80 col-span-2">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div>
+                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
+                        Kelompok Data Ternak
+                      </span>
+                      <div className="font-extrabold text-slate-900 text-sm mt-0.5 flex items-center gap-1.5">
+                        {goat.kelompokTernak === 'Bibit Kambing Terseleksi' ? (
+                          <span className="text-amber-900 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-md text-xs font-bold inline-flex items-center gap-1">
+                            ⭐ Kelompok 2: Bibit Kambing Terseleksi
+                          </span>
+                        ) : (
+                          <span className="text-emerald-900 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-md text-xs font-bold inline-flex items-center gap-1">
+                            🏡 Kelompok 1: Ternak Desa Sukamaju
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {onToggleKelompok && (
+                      <button
+                        type="button"
+                        onClick={() => onToggleKelompok(goat.id)}
+                        className="text-xs font-bold px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 transition-colors flex items-center gap-1.5 shadow-2xs"
+                        title="Pindahkan kelompok ternak"
+                      >
+                        <ArrowRightLeft className="w-3.5 h-3.5 text-emerald-700" />
+                        <span>
+                          Pindah ke {goat.kelompokTernak === 'Bibit Kambing Terseleksi' ? 'Kelompok 1 (Sukamaju)' : 'Kelompok 2 (Bibit Terseleksi)'}
+                        </span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
                 <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200/80">
                   <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Peternak Pemilik</span>
                   <div className="font-bold text-slate-900 text-sm mt-0.5">{goat.namaPeternak}</div>

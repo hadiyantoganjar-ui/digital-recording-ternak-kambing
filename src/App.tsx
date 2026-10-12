@@ -146,6 +146,54 @@ export default function App() {
     }
   };
 
+  const handleToggleKelompok = (goatId: string) => {
+    const target = goats.find((g) => g.id === goatId);
+    if (!target) return;
+    const newKelompok: KelompokTernak =
+      target.kelompokTernak === 'Bibit Kambing Terseleksi'
+        ? 'Ternak Desa Sukamaju'
+        : 'Bibit Kambing Terseleksi';
+
+    const updated = goats.map((g) =>
+      g.id === goatId ? { ...g, kelompokTernak: newKelompok } : g
+    );
+    updateGoatsState(updated);
+    if (selectedGoatForDetail?.id === goatId) {
+      setSelectedGoatForDetail({ ...selectedGoatForDetail, kelompokTernak: newKelompok });
+    }
+    showNotification(
+      `Ternak #${target.nomorEartag} dipindahkan ke ${
+        newKelompok === 'Bibit Kambing Terseleksi'
+          ? 'Kelompok 2: Bibit Terseleksi'
+          : 'Kelompok 1: Ternak Desa Sukamaju'
+      }`
+    );
+  };
+
+  const handleMoveAllKelompok2ToKelompok1 = () => {
+    const k2Count = goats.filter((g) => g.kelompokTernak === 'Bibit Kambing Terseleksi').length;
+    if (k2Count === 0) {
+      showNotification(
+        'Semua data (227 ekor) saat ini sudah berada di Kelompok 1 (Ternak Desa Sukamaju). Kolom Kelompok 2 tetap aktif dan siap untuk pencatatan bibit baru.'
+      );
+      return;
+    }
+    const updated = goats.map((g) => ({
+      ...g,
+      kelompokTernak: 'Ternak Desa Sukamaju' as KelompokTernak,
+    }));
+    updateGoatsState(updated);
+    if (selectedGoatForDetail) {
+      setSelectedGoatForDetail({
+        ...selectedGoatForDetail,
+        kelompokTernak: 'Ternak Desa Sukamaju',
+      });
+    }
+    showNotification(
+      `Berhasil memindahkan ${k2Count} ekor dari Kelompok 2 ke Kelompok 1 (Ternak Desa Sukamaju). Kolom Kelompok 2 tetap dipertahankan.`
+    );
+  };
+
   const handleSaveWeight = (
     goatId: string, 
     newBobot: number, 
@@ -506,6 +554,8 @@ export default function App() {
               setFormDefaultKelompok(kelompok);
               setIsGoatFormOpen(true);
             }}
+            onToggleKelompok={handleToggleKelompok}
+            onMoveAllKelompok2ToKelompok1={handleMoveAllKelompok2ToKelompok1}
           />
         ) : (
           <AnalyticsView
@@ -579,6 +629,7 @@ export default function App() {
             setGoatToEdit(g);
             setIsGoatFormOpen(true);
           }}
+          onToggleKelompok={handleToggleKelompok}
           onSaveWeightRecord={handleSaveWeightRecord}
           onDeleteWeightRecord={handleDeleteWeightRecord}
         />

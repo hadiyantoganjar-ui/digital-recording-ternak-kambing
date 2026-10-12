@@ -23,7 +23,8 @@ import {
   Flame,
   Volume2,
   Award,
-  Users
+  Users,
+  ArrowRightLeft
 } from 'lucide-react';
 import { 
   hitungAdgAntarTimbang, 
@@ -46,6 +47,8 @@ interface GoatTableProps {
   onOpenFeedRecord?: (goat: GoatRecord) => void;
   onOpenEstrusRecord?: (goat: GoatRecord) => void;
   onOpenAddModalWithKelompok?: (kelompok: KelompokTernak) => void;
+  onToggleKelompok?: (goatId: string) => void;
+  onMoveAllKelompok2ToKelompok1?: () => void;
 }
 
 export const GoatTable: React.FC<GoatTableProps> = ({
@@ -60,6 +63,8 @@ export const GoatTable: React.FC<GoatTableProps> = ({
   onOpenFeedRecord,
   onOpenEstrusRecord,
   onOpenAddModalWithKelompok,
+  onToggleKelompok,
+  onMoveAllKelompok2ToKelompok1,
 }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(25);
@@ -284,6 +289,22 @@ export const GoatTable: React.FC<GoatTableProps> = ({
                 <span className="text-[9px] px-1.5 py-0.2 bg-amber-200 text-amber-900 font-extrabold rounded">Kosong</span>
               )}
             </button>
+
+            {onMoveAllKelompok2ToKelompok1 && (
+              <button
+                type="button"
+                onClick={onMoveAllKelompok2ToKelompok1}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap flex items-center gap-1.5 transition-all ${
+                  bibitTerseleksiCount > 0
+                    ? 'bg-amber-100 hover:bg-amber-200 text-amber-950 border border-amber-300 shadow-2xs'
+                    : 'bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 shadow-2xs'
+                }`}
+                title="Pindahkan semua data ternak dari Kelompok 2 ke Kelompok 1 (kolom kelompok 2 tetap dipertahankan)"
+              >
+                <ArrowRightLeft className="w-3.5 h-3.5 text-emerald-700" />
+                <span>Pindahkan Semua ke Kelompok 1</span>
+              </button>
+            )}
           </div>
 
           {onOpenAddModalWithKelompok && (
@@ -580,6 +601,7 @@ export const GoatTable: React.FC<GoatTableProps> = ({
           <thead>
             <tr className="bg-slate-100/80 text-slate-600 font-bold uppercase tracking-wider text-[11px] border-b border-slate-200">
               <th className="py-3 px-4">Identitas & RFID</th>
+              <th className="py-3 px-3">Kelompok Data</th>
               <th className="py-3 px-3">Bangsa & Kelamin</th>
               <th className="py-3 px-3">Siklus Birahi (Real-Time)</th>
               <th className="py-3 px-3">Umur Gigi</th>
@@ -594,7 +616,7 @@ export const GoatTable: React.FC<GoatTableProps> = ({
           <tbody className="divide-y divide-slate-100">
             {paginatedGoats.length === 0 ? (
               <tr>
-                <td colSpan={10} className="py-12 text-center text-slate-400">
+                <td colSpan={11} className="py-12 text-center text-slate-400">
                   {filterOptions.kelompokTernak === 'Bibit Kambing Terseleksi' && bibitTerseleksiCount === 0 ? (
                     <div className="flex flex-col items-center justify-center gap-3 max-w-md mx-auto p-4">
                       <div className="w-14 h-14 rounded-2xl bg-amber-100 border border-amber-300 flex items-center justify-center text-2xl shadow-xs">
@@ -702,6 +724,31 @@ export const GoatTable: React.FC<GoatTableProps> = ({
                             )}
                           </div>
                         </div>
+                      </div>
+                    </td>
+
+                    {/* Kelompok Data */}
+                    <td className="py-3 px-3" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center gap-1.5">
+                        {goat.kelompokTernak === 'Bibit Kambing Terseleksi' ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-black bg-amber-100 text-amber-950 border border-amber-300 shadow-2xs whitespace-nowrap">
+                            <span>⭐</span> Kelompok 2: Bibit
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-emerald-50 text-emerald-900 border border-emerald-200 shadow-2xs whitespace-nowrap">
+                            <span>🏡</span> Kelompok 1: Sukamaju
+                          </span>
+                        )}
+                        {onToggleKelompok && (
+                          <button
+                            type="button"
+                            onClick={() => onToggleKelompok(goat.id)}
+                            className="p-1 rounded-md text-slate-400 hover:text-emerald-700 hover:bg-slate-100 transition-colors"
+                            title={`Pindahkan ke ${goat.kelompokTernak === 'Bibit Kambing Terseleksi' ? 'Kelompok 1 (Desa Sukamaju)' : 'Kelompok 2 (Bibit Terseleksi)'}`}
+                          >
+                            <ArrowRightLeft className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
                     </td>
 
@@ -1177,6 +1224,16 @@ export const GoatTable: React.FC<GoatTableProps> = ({
                     >
                       <HeartPulse className="w-3.5 h-3.5" />
                     </button>
+                    {onToggleKelompok && (
+                      <button
+                        type="button"
+                        onClick={() => onToggleKelompok(goat.id)}
+                        className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs transition-colors"
+                        title={`Pindahkan ke ${goat.kelompokTernak === 'Bibit Kambing Terseleksi' ? 'Kelompok 1 (Desa Sukamaju)' : 'Kelompok 2 (Bibit Terseleksi)'}`}
+                      >
+                        <ArrowRightLeft className="w-3.5 h-3.5 text-emerald-700" />
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => onSelectGoat(goat)}

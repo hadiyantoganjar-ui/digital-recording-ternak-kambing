@@ -3,6 +3,14 @@ import { parseInitialData } from '../data/initialData';
 
 const STORAGE_KEY = 'ternak_kambing_rfid_v3';
 const LEGACY_STORAGE_KEYS = ['ternak_kambing_rfid_v2', 'ternak_kambing_rfid_v1'];
+const MIGRATION_KELOMPOK2_TO_1_KEY = 'migrated_all_k2_to_k1_v2';
+
+export function moveAllGoatsFromKelompok2ToKelompok1(goats: GoatRecord[]): GoatRecord[] {
+  return goats.map((g) => ({
+    ...g,
+    kelompokTernak: 'Ternak Desa Sukamaju',
+  }));
+}
 
 export function loadGoats(): GoatRecord[] {
   try {
@@ -29,11 +37,19 @@ export function loadGoats(): GoatRecord[] {
         const initialSample = parseInitialData();
         const initialMap = new Map(initialSample.map((g) => [g.nomorEartag, g]));
 
+        const hasMigrated = localStorage.getItem(MIGRATION_KELOMPOK2_TO_1_KEY) === 'true';
+
         filtered = filtered.map((g) => {
           const sample = initialMap.get(g.nomorEartag);
-          const kelompokTernak = g.kelompokTernak === 'Bibit Kambing Terseleksi' 
-            ? 'Bibit Kambing Terseleksi' 
-            : 'Ternak Desa Sukamaju';
+          // Pindahkan semua data dari kelompok 2 ke kelompok 1 jika belum dimigrasi (perintah pengguna: pindahkan semua data saja dari kelompok 2 ke kelompok 1)
+          let kelompokTernak: 'Ternak Desa Sukamaju' | 'Bibit Kambing Terseleksi';
+          if (!hasMigrated) {
+            kelompokTernak = 'Ternak Desa Sukamaju';
+          } else {
+            kelompokTernak = g.kelompokTernak === 'Bibit Kambing Terseleksi' 
+              ? 'Bibit Kambing Terseleksi' 
+              : 'Ternak Desa Sukamaju';
+          }
 
           if (sample && !g.tanggalBirahiTerakhir && sample.tanggalBirahiTerakhir) {
             return {
@@ -50,6 +66,10 @@ export function loadGoats(): GoatRecord[] {
             kelompokTernak,
           };
         });
+
+        if (!hasMigrated) {
+          localStorage.setItem(MIGRATION_KELOMPOK2_TO_1_KEY, 'true');
+        }
 
         saveGoats(filtered);
         return filtered;
